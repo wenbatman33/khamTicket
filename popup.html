@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<style>
+  body {
+    width: 330px;
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-size: 14px; margin: 0; padding: 14px; background: #fafafa; color: #333;
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .sub { font-size: 12px; color: #888; margin-bottom: 12px; }
+  .field { margin-bottom: 12px; }
+  label { display: block; font-weight: 600; margin-bottom: 4px; }
+  .hint { font-size: 12px; color: #888; margin-top: 3px; line-height: 1.5; }
+  input[type="text"], textarea {
+    width: 100%; box-sizing: border-box; padding: 6px 8px;
+    border: 1px solid #ccc; border-radius: 6px; font-size: 14px; font-family: inherit;
+  }
+  textarea { height: 110px; resize: vertical; line-height: 1.6; }
+  .field.inline { display: flex; align-items: center; gap: 8px; }
+  .field.inline label { margin: 0; white-space: nowrap; }
+  .field.inline input[type="number"] {
+    width: 70px; text-align: center; padding: 6px 4px;
+    border: 1px solid #ccc; border-radius: 6px; font-size: 14px; font-family: inherit;
+  }
+  .check { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .check input { width: 16px; height: 16px; margin: 0; }
+  .check label { font-weight: 500; margin: 0; }
+  /* 主開關：搶票中要能一眼看到、立刻關掉 */
+  .master {
+    border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+    border: 2px solid #ccc; background: #f0f0f0; transition: background .15s, border-color .15s;
+  }
+  .master.on { border-color: #c8102e; background: #fdecef; }
+  .master-row { display: flex; align-items: center; gap: 10px; }
+  .master-row input { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; }
+  .master-row label { font-size: 15px; font-weight: 700; margin: 0; }
+  .master-state { font-size: 12px; color: #666; margin-top: 6px; line-height: 1.5; }
+  .section {
+    border: 1px solid #e6dde0; background: #fdf7f8; border-radius: 8px;
+    padding: 10px 10px 4px; margin-bottom: 12px;
+  }
+  .section-title { font-weight: 700; margin-bottom: 4px; }
+  .section-note { font-size: 12px; color: #755; line-height: 1.6; margin-bottom: 10px; }
+  .adv { margin-bottom: 12px; }
+  .adv summary { cursor: pointer; font-size: 13px; color: #c8102e; font-weight: 600; }
+  .warn {
+    font-size: 12px; line-height: 1.6; color: #7a4a00; background: #fff6e5;
+    border: 1px solid #ffd699; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px;
+  }
+  button {
+    width: 100%; padding: 9px; border: 0; border-radius: 6px;
+    font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 6px;
+  }
+  #save { background: #c8102e; color: #fff; }
+  #run { background: #eee; color: #333; }
+  #status { font-size: 12px; color: #2e7d32; min-height: 18px; text-align: center; }
+</style>
+</head>
+<body>
+  <h1>🎫 寬宏搶票輔助</h1>
+  <div class="sub">kham.com.tw ｜ 電腦配位模式</div>
+
+  <div class="master" id="masterBox">
+    <div class="master-row">
+      <input type="checkbox" id="enabled">
+      <label for="enabled">自動搶票</label>
+    </div>
+    <div class="master-state" id="masterState"></div>
+  </div>
+
+  <div class="field">
+    <label for="startAt">開搶時間</label>
+    <input type="text" id="startAt" placeholder="10:00:00（留空 = 進頁面就開始）">
+    <div class="hint">可精確到秒。以本機時鐘為準，請先確認系統時間為自動同步。</div>
+  </div>
+
+  <div class="field inline">
+    <label for="refreshMs">重試間隔</label>
+    <input type="number" id="refreshMs" min="50" step="50">
+    <span class="hint" style="margin:0">毫秒，預設 800</span>
+  </div>
+
+  <div class="section">
+    <div class="section-title">搶什麼票</div>
+    <div class="section-note">由上往下試，搶到就停。比對不分大小寫、忽略空白，可只填一部分（填「VIP」會對到所有含 VIP 的票區）。</div>
+    <div class="field">
+      <label for="targets">票區優先順序（一行一個）</label>
+      <textarea id="targets" placeholder="VIP區2999元&#10;B區1999元"></textarea>
+    </div>
+    <div class="field inline">
+      <label for="count">每次買幾張</label>
+      <input type="number" id="count" min="1" max="8">
+    </div>
+    <div class="check">
+      <input type="checkbox" id="allowFewer">
+      <label for="allowFewer">剩餘不足時買剩下的（預設不足就換區）</label>
+    </div>
+  </div>
+
+  <div class="check">
+    <input type="checkbox" id="acceptNonAdjacent">
+    <label for="acceptNonAdjacent">自動勾選「接受不連位座位」</label>
+  </div>
+  <div class="check">
+    <input type="checkbox" id="autoSubmitCaptcha">
+    <label for="autoSubmitCaptcha">驗證碼輸滿自動送出</label>
+  </div>
+
+  <div class="warn">
+    <b>驗證碼要自己打</b>：本工具不辨識驗證碼、也不代填帳號密碼。<br>
+    請<b>先登入會員</b>再開搶，張數頁會自動放大驗證碼並聚焦輸入框。
+  </div>
+
+  <details class="adv">
+    <summary>進階設定</summary>
+    <div style="margin-top:10px">
+      <div class="field">
+        <label for="ticketType">票種優先順序（逗號分隔）</label>
+        <input type="text" id="ticketType" placeholder="留空 = 用該區第一種票">
+        <div class="hint">同一票區有多種票價時（全票／優待票…）要哪個。完全相符優先於包含。</div>
+      </div>
+      <div class="field inline">
+        <label for="captchaLen">驗證碼位數</label>
+        <input type="number" id="captchaLen" min="1" max="10">
+        <span class="hint" style="margin:0">輸滿即送出，預設 4</span>
+      </div>
+      <div class="check">
+        <input type="checkbox" id="autoCheckout">
+        <label for="autoCheckout">加入購物車後自動按「結帳」</label>
+      </div>
+      <div class="hint">結帳流程請自行確認金額與場次後再付款。</div>
+    </div>
+  </details>
+
+  <button id="save">💾 儲存設定</button>
+  <button id="run">▶ 在目前分頁立即執行</button>
+  <div id="status"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
