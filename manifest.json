@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "寬宏售票表單填寫輔助",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "協助在寬宏售票（kham.com.tw）填寫票區／張數／驗證碼欄位並顯示狀態；與該網站無隸屬關係。",
   "permissions": [
     "storage",

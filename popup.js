@@ -4,6 +4,7 @@ const DEFAULTS = {
   enabled: false,
   startAt: '',
   refreshMs: 800,
+  perfKeyword: '',
   targets: '',
   count: 2,
   ticketType: '',
@@ -14,7 +15,7 @@ const DEFAULTS = {
   autoCheckout: false,
 };
 
-const ids = ['enabled', 'startAt', 'refreshMs', 'targets', 'count', 'ticketType',
+const ids = ['enabled', 'startAt', 'refreshMs', 'perfKeyword', 'targets', 'count', 'ticketType',
   'acceptNonAdjacent', 'allowFewer', 'captchaLen', 'autoSubmitCaptcha', 'autoCheckout'];
 const els = {};
 ids.concat(['masterBox', 'masterState', 'save', 'run', 'status']).forEach((k) => {
@@ -27,14 +28,15 @@ function renderMaster() {
   const t = els.startAt.value.trim();
   els.masterState.textContent = !on
     ? '已關閉：不會自動動作。可按「立即執行」查一次票區／填一次表單，不送出。'
-    : (t ? t + ' 一到就持續查票，有票自動進張數頁並填好，等你打驗證碼。'
-         : '進頁面就持續查票，有票自動進張數頁並填好，等你打驗證碼。');
+    : (t ? t + ' 一到就開始：節目頁按「立即購票」→ 選場次 → 查票 → 填好表單，等你打驗證碼。'
+         : '進頁面就開始：節目頁按「立即購票」→ 選場次 → 查票 → 填好表單，等你打驗證碼。');
 }
 
 chrome.storage.sync.get(DEFAULTS).then((s) => {
   els.enabled.checked = !!s.enabled;
   els.startAt.value = s.startAt || '';
   els.refreshMs.value = String(parseInt(s.refreshMs, 10) || 800);
+  els.perfKeyword.value = s.perfKeyword || '';
   els.targets.value = s.targets || '';
   els.count.value = String(parseInt(s.count, 10) || 2);
   els.ticketType.value = s.ticketType || '';
@@ -61,6 +63,7 @@ function collect() {
     enabled: els.enabled.checked,
     startAt: els.startAt.value.trim().replace(/：/g, ':').replace(/\s/g, ''),
     refreshMs: n(els.refreshMs, 800),
+    perfKeyword: els.perfKeyword.value.trim(),
     targets: els.targets.value.trim(),
     count: Math.max(1, n(els.count, 2)),
     ticketType: els.ticketType.value.trim(),

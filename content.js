@@ -1,9 +1,15 @@
 // 寬宏售票（kham.com.tw）表單填寫輔助 — 主邏輯
 //
-// 流程分三頁：
-//   UTK0201_000  票區頁：依優先順序找有票的票區，找到就走「電腦配位」進入張數頁
-//   UTK0201_001  張數頁：填張數、勾「接受不連位」、把驗證碼放大並聚焦，輸入完成後送出
-//   UTK0206_     購物車：確認加入結果
+// 網站的購票流程（實地追出來的）：
+//   UTK0201_      節目頁：開賣前按「立即購票」只會得到「節目尚未啟售！」，要輪詢到開賣
+//   UTK0201_00    場次頁：多場次時在這裡選一場（按「立即訂購」）
+//   UTK0201_000   票區頁（A 型）：有「自行選位／電腦配位」兩顆按鈕，預設電腦配位
+//   UTK0204_      票區頁（B 型）：同樣列票區，但這條流程沒有電腦配位，只能自行選位
+//   UTK0201_001   張數頁：電腦配位才會走到，填張數 + 驗證碼
+//   UTK0205_      選位頁：B 型流程點票區後到這裡，座位要自己勾（本工具不代選）
+//   UTK0206_      購物車
+//
+// 注意：這些頁面綁 session 流程狀態，直接用網址跳進去會被踢回首頁。
 //
 // 所有請求都由網站原有程式碼發出；本工具不辨識驗證碼、不代填帳號密碼。
 (() => {
@@ -11,13 +17,14 @@
   if (window.__khamHelperLoaded) return;
   window.__khamHelperLoaded = true;
 
-  const VER = '1.0.0';
+  const VER = '1.1.0';
 
   // ---------------------------------------------------------------- 設定
   const DEFAULTS = {
     enabled: false,          // 主開關：關閉時只做提示與「立即執行」單次動作
     startAt: '',             // 開搶時間 HH:MM(:SS)，留空 = 進頁面就開始
     refreshMs: 800,          // 重試間隔（毫秒）
+    perfKeyword: '',         // 場次關鍵字（多場次時用，如 2/27），留空 = 第一個可訂購的
     targets: '',             // 票區優先順序，一行一個
     count: 2,                // 每次買幾張
     ticketType: '',          // 票種優先順序（逗號分隔），留空 = 用第一種
@@ -31,11 +38,19 @@
 
   // ---------------------------------------------------------------- 頁面判斷
   const PATH = location.pathname;
+  // 比對順序由長到短：_001 / _000 / _00 / _ 前綴相同，短的會誤中長的
   const PAGE =
-    /UTK0201_000/i.test(PATH) ? 'area' :
-    /UTK0201_001/i.test(PATH) ? 'qty' :
-    /UTK0206_/i.test(PATH)    ? 'cart' :
-    /UTK0205_/i.test(PATH)    ? 'seatmap' : 'other';
+    /UTK0201_001\.aspx/i.test(PATH) ? 'qty' :
+    /UTK0201_000\.aspx/i.test(PATH) ? 'area' :
+    /UTK0201_00\.aspx/i.test(PATH)  ? 'perf' :
+    /UTK0201_\.aspx/i.test(PATH)    ? 'product' :
+    /UTK0204_\.aspx/i.test(PATH)    ? 'area' :
+    /UTK0205_\.aspx/i.test(PATH)    ? 'seatmap' :
+    /UTK0206_\.aspx/i.test(PATH)    ? 'cart' : 'other';
+
+  // 票區頁有兩種：UTK0201_000 可走電腦配位；UTK0204_ 這條流程只能自行選位
+  // （實測：從 UTK0204_ 的 session 直接跳 UTK0201_001 會被踢回首頁）
+  const AREA_FLAVOR = /UTK0204_\.aspx/i.test(PATH) ? 'seatpick' : 'auto';
 
   const qs = new URLSearchParams(location.search);
   const hid = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
@@ -169,6 +184,109 @@
     return hh + ':' + mm + ':' + ss;
   }
 
+  // 網站的提示對話框是 jQuery UI dialog（#dialog-message），開賣前輪詢會一直跳，要順手關掉
+  function dismissDialog() {
+    const btn = document.querySelector('.ui-dialog-buttonpane button, .ui-dialog-titlebar-close');
+    if (btn) { btn.click(); return true; }
+    return false;
+  }
+
+  // ================================================================ 節目頁（開賣前等待啟售）
+  // 開賣前按「立即購票」，伺服器只會回 alert1('節目尚未啟售！')，
+  // 這時候連 PERFORMANCE_ID 都拿不到，票區頁也進不去，只能在這頁等到啟售。
+  const productState = { tries: 0, running: false, stop: false, lastRespAt: 0, lastMsg: '' };
+
+  function clickGoBuy() {
+    const btn = document.getElementById('GO_BUY2')
+      || [...document.querySelectorAll('button,a')].find((b) => /doGoBuy/.test(b.getAttribute('onclick') || ''));
+    if (!btn) return false;
+    btn.click();
+    return true;
+  }
+
+  function renderProductPanel(extra) {
+    const lines = [
+      (S.enabled ? '● 等待啟售' : '○ 已關閉（手動）') + '｜第 ' + productState.tries + ' 次｜' + new Date().toLocaleTimeString(),
+      '節目頁：啟售後會自動進入購票流程',
+    ];
+    if (productState.lastMsg) lines.push('網站回應：' + productState.lastMsg);
+    if (extra) lines.push(extra);
+    if (document.hidden) lines.push('⚠️ 分頁在背景，計時可能被瀏覽器節流');
+    showPanel(lines);
+  }
+
+  async function productLoop() {
+    if (productState.running) return;
+    productState.running = true;
+    try {
+      while (!productState.stop && S.enabled) {
+        const ts = startTimestamp();
+        const wait = ts - Date.now();
+        if (wait > 0) {
+          showPanel([
+            '● 等待開賣｜' + S.startAt,
+            '倒數 ' + fmtCountdown(wait),
+            '時間一到才會開始按「立即購票」',
+            document.hidden ? '⚠️ 分頁在背景，開賣瞬間可能慢約 1 秒' : '請保持此分頁在前景',
+          ]);
+          await sleep(Math.min(500, Math.max(50, wait)));
+          continue;
+        }
+
+        dismissDialog();
+        // 網站用 isClick 當送出中旗標，回應沒回來就會一直鎖著；超過 3 秒沒回應才還原
+        if (productState.tries > 0 && Date.now() - (productState.lastRespAt || 0) > 3000) {
+          window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'RESET_CLICK' }, location.origin);
+        }
+        productState.tries++;
+        if (!clickGoBuy()) {
+          showPanel(['⚠️ 找不到「立即購票」按鈕', '請確認這是節目頁，或重新整理後再試']);
+          return;
+        }
+        renderProductPanel();
+        await sleep(Math.max(50, S.refreshMs));
+      }
+    } finally {
+      productState.running = false;
+    }
+  }
+
+  // ================================================================ 場次頁（多場次時選一場）
+  // 每個場次的「立即訂購」是 top.location.href='UTK0204_.aspx?PERFORMANCE_ID=...'
+  function perfRowText(el) {
+    let n = el;
+    for (let i = 0; i < 6 && n && n.parentElement; i++) {
+      n = n.parentElement;
+      if (n.tagName === 'TR' || n.tagName === 'LI' || /row|item|list/i.test(n.className || '')) break;
+    }
+    return ((n || el).innerText || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function perfCandidates() {
+    return [...document.querySelectorAll('button,a,input[type=submit]')]
+      .filter((b) => /UTK0204_|UTK0201_000/i.test((b.getAttribute('onclick') || '') + (b.getAttribute('href') || '')))
+      .map((b) => ({ el: b, text: perfRowText(b) }));
+  }
+
+  function runPerf(auto) {
+    const list = perfCandidates();
+    if (!list.length) {
+      showPanel(['● 場次頁', '⚠️ 找不到可訂購的場次', '可能尚未開賣或該場次已售完']);
+      return;
+    }
+    const k = norm(S.perfKeyword);
+    const hit = k ? list.find((x) => norm(x.text).includes(k)) : list[0];
+    if (!hit) {
+      showPanel(['● 場次頁', '⚠️ 沒有符合「' + S.perfKeyword + '」的場次', '共 ' + list.length + ' 個可訂購場次']);
+      toast('⚠️ 找不到符合「' + S.perfKeyword + '」的場次');
+      return;
+    }
+    showPanel(['● 場次頁', '→ ' + hit.text.slice(0, 60), auto ? '自動進入中…' : '手動模式不自動進入']);
+    if (!auto) return;
+    toast('進入場次：' + hit.text.slice(0, 40));
+    hit.el.click();
+  }
+
   // ================================================================ 票區頁
   const areaState = { scans: 0, running: false, stop: false, cooldown: {}, lastRows: [] };
 
@@ -277,12 +395,39 @@
     return 'UTK0201_001.aspx?' + p.toString();
   }
 
+  // UTK0204_ 流程：點票區走網站原生的 Send() 進選位頁（UTK0205_），座位由使用者自己勾
+  function enterSeatPick(row) {
+    const tr = document.getElementById(row.id);
+    if (tr) { tr.click(); return; }
+    const g = row.g || {};
+    const p = new URLSearchParams();
+    p.set('PERFORMANCE_ID', g.perf || PERF_ID);
+    p.set('GROUP_ID', g.group != null && g.group !== '' ? g.group : '0');
+    p.set('PERFORMANCE_PRICE_AREA_ID', row.id);
+    location.href = 'UTK0205_.aspx?' + p.toString();
+  }
+
   // 只讀票區頁 HTML 取庫存，不整頁重載（省下約 1 秒）
+  // 這些頁面綁 session 的購票流程狀態，狀態一壞就會被導回首頁，這裡要認出來
   async function scanOnce() {
     const res = await fetch(areaPageUrl(), { credentials: 'include', cache: 'no-store' });
     const html = await res.text();
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    return parseAreaDoc(doc);
+    const info = parseAreaDoc(doc);
+    info.lost = /UTK0101|UTK1301/i.test(res.url || '') || !doc.getElementById('salesTable');
+    return info;
+  }
+
+  // session 失效：停手並要使用者從節目頁重新進來，不自作主張亂跳
+  function onSessionLost() {
+    areaState.stop = true;
+    showPanel([
+      '⚠️ 購票流程已失效',
+      '網站把請求導回首頁了（session 狀態壞掉或逾時）。',
+      '請重新從節目頁「立即購票」走一次流程，再開自動搶票。',
+    ]);
+    toast('⚠️ 購票流程已失效，請重新從節目頁進入');
+    notify('⚠️ 購票流程已失效', '請重新從節目頁「立即購票」走一次流程');
   }
 
   function renderAreaPanel(info, extra) {
@@ -290,7 +435,7 @@
     const targets = parseList(S.targets);
     const lines = [];
     lines.push((S.enabled ? '● 監看中' : '○ 已關閉（手動）') + '｜第 ' + areaState.scans + ' 次｜' + new Date().toLocaleTimeString());
-    lines.push('模式：電腦配位｜每次 ' + need + ' 張');
+    lines.push('模式：' + (AREA_FLAVOR === 'seatpick' ? '自行選位（此流程無電腦配位）' : '電腦配位') + '｜每次 ' + need + ' 張');
     if (info && info.action) lines.push('場次狀態：' + info.action);
     const rows = (info && info.rows) || [];
     const show = targets.length
@@ -336,14 +481,25 @@
           continue;
         }
 
+        if (info.lost) { onSessionLost(); return; }
+
         const hit = pickRow(info.rows);
         renderAreaPanel(info, hit ? '→ 前往 ' + hit.name : null);
 
         if (hit) {
           if (!hit.g) hit.g = await waitGmap(hit.id);   // 座位圖還沒載入時等一下，避免 GROUP_ID 抓錯
-          toast('找到票區：' + hit.name + '（餘 ' + (Number.isNaN(hit.left) ? '未顯示' : hit.left) + '）\n以電腦配位進入張數頁');
           sessionStorage.setItem('kham_area_url', location.href);
           sessionStorage.setItem('kham_last_area', JSON.stringify({ id: hit.id, name: hit.name, at: Date.now() }));
+          const left = Number.isNaN(hit.left) ? '未顯示' : hit.left;
+          if (AREA_FLAVOR === 'seatpick') {
+            // 這條流程沒有電腦配位，只能進選位頁自己勾座位
+            toast('找到票區：' + hit.name + '（餘 ' + left + '）\n這個活動只能自行選位，座位請自己勾');
+            notify('🎫 有票：' + hit.name, '餘 ' + left + '，已進入選位頁，請自行勾選座位');
+            flashTitle('🎫 有票：' + hit.name);
+            enterSeatPick(hit);
+            return;
+          }
+          toast('找到票區：' + hit.name + '（餘 ' + left + '）\n以電腦配位進入張數頁');
           location.href = buyUrl(hit);
           return;
         }
@@ -358,6 +514,7 @@
     areaState.scans++;
     try {
       const info = await scanOnce();
+      if (info.lost) { onSessionLost(); return; }
       const hit = pickRow(info.rows);
       renderAreaPanel(info, hit ? '→ 有票：' + hit.name + '（手動模式不自動前往）' : '目前沒有符合條件的票');
       toast(hit ? '有票：' + hit.name + '\n手動模式不自動前往，請自行點選' : '目前沒有符合條件的票');
@@ -523,6 +680,13 @@
     const t = String(text || '');
     if (!t) return;
     log('網站提示：', t);
+    if (PAGE === 'product') {
+      // 開賣前每輪都會跳一次，只更新面板並把對話框關掉，不洗版
+      productState.lastMsg = t;
+      renderProductPanel();
+      setTimeout(dismissDialog, 150);
+      return;
+    }
     if (/驗證碼/.test(t)) {
       qtyState.submitted = false;
       window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'RESET_CLICK' }, location.origin);
@@ -547,7 +711,26 @@
   }
 
   function handleXhr(d) {
-    if (!d || !/ADD_SHOPPING_CAR/i.test(d.action || '')) return;
+    if (!d) return;
+    if (/GOBUY/i.test(d.action || '')) {
+      productState.lastRespAt = Date.now();
+      const body = String(d.text || '');
+      if (/location/i.test(body)) {
+        // 網站回傳導向指令 = 已啟售，接下來由網站自己帶到場次／票區頁
+        productState.stop = true;
+        productState.lastMsg = '已啟售，進入購票流程';
+        toast('🎫 已啟售，進入購票流程');
+        notify('🎫 開賣了', '節目已啟售，正在進入購票流程');
+        flashTitle('🎫 開賣了！');
+        renderProductPanel();
+        return;
+      }
+      const m = /alert1\(\s*'([^']*)'/.exec(body);
+      productState.lastMsg = m ? m[1] : (body ? body.slice(0, 40) : '(無回應內容)');
+      renderProductPanel();
+      return;
+    }
+    if (!/ADD_SHOPPING_CAR/i.test(d.action || '')) return;
     const body = String(d.text || '');
     if (/location/i.test(body)) {
       // 網站回傳導向指令 = 已加入購物車
@@ -576,7 +759,12 @@
 
   function start() {
     loadCooldown();
-    if (PAGE === 'area') {
+    if (PAGE === 'product') {
+      renderProductPanel(S.enabled ? '啟動中…' : '主開關關閉，可按「立即執行」試一次');
+      if (S.enabled) productLoop();
+    } else if (PAGE === 'perf') {
+      runPerf(S.enabled);
+    } else if (PAGE === 'area') {
       sessionStorage.setItem('kham_area_url', location.href);
       currentGmap();
       renderAreaPanel(null, S.enabled ? '啟動中…' : '主開關關閉，可按「立即執行」查一次');
@@ -588,7 +776,11 @@
     } else if (PAGE === 'cart') {
       runCart();
     } else if (PAGE === 'seatmap') {
-      showPanel(['⚠️ 這是「自行選位」頁', '本工具以電腦配位為主，請回上一頁改按電腦配位']);
+      showPanel([
+        '● 自行選位頁',
+        '這個活動的流程沒有電腦配位，座位要自己勾。',
+        '勾完座位後按「加入購物車」，驗證碼一樣要自己輸入。',
+      ]);
     }
   }
 
@@ -601,6 +793,10 @@
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'sync') return;
     Object.keys(changes).forEach((k) => { S[k] = changes[k].newValue; });
+    if (PAGE === 'product') {
+      if (S.enabled && !productState.running) { productState.stop = false; productLoop(); }
+      if (!S.enabled) { productState.stop = true; renderProductPanel('已停止'); }
+    }
     if (PAGE === 'area') {
       if (S.enabled && !areaState.running) { areaState.stop = false; areaLoop(); }
       if (!S.enabled) { areaState.stop = true; renderAreaPanel(null, '已停止'); }
@@ -610,7 +806,12 @@
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (!msg || msg.type !== 'RUN_NOW') return;
-    if (PAGE === 'area') {
+    if (PAGE === 'product') {
+      if (S.enabled) { productState.stop = false; productLoop(); }
+      else { productState.tries++; dismissDialog(); clickGoBuy(); renderProductPanel('已試一次'); }
+    } else if (PAGE === 'perf') {
+      runPerf(true);
+    } else if (PAGE === 'area') {
       if (S.enabled) { areaState.stop = false; areaLoop(); } else areaRunOnce();
     } else if (PAGE === 'qty') {
       runQty();

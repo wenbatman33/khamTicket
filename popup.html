@@ -82,6 +82,12 @@
     <span class="hint" style="margin:0">毫秒，預設 800</span>
   </div>
 
+  <div class="field">
+    <label for="perfKeyword">場次關鍵字</label>
+    <input type="text" id="perfKeyword" placeholder="2/27（多場次時用，留空 = 第一個可訂購的）">
+    <div class="hint">只有一個場次就留空。比對場次列的日期文字。</div>
+  </div>
+
   <div class="section">
     <div class="section-title">搶什麼票</div>
     <div class="section-note">由上往下試，搶到就停。比對不分大小寫、忽略空白，可只填一部分（填「VIP」會對到所有含 VIP 的票區）。</div>
@@ -110,7 +116,9 @@
 
   <div class="warn">
     <b>驗證碼要自己打</b>：本工具不辨識驗證碼、也不代填帳號密碼。<br>
-    請<b>先登入會員</b>再開搶，張數頁會自動放大驗證碼並聚焦輸入框。
+    請<b>先登入會員</b>再開搶，張數頁會自動放大驗證碼並聚焦輸入框。<br>
+    <b>開賣前請停在節目頁</b>（網址 <code>UTK0201_.aspx?PRODUCT_ID=…</code>），
+    工具會等到開賣時間才開始按「立即購票」。
   </div>
 
   <details class="adv">
