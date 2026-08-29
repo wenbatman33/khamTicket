@@ -113,6 +113,21 @@
     <input type="checkbox" id="autoSubmitCaptcha">
     <label for="autoSubmitCaptcha">驗證碼輸滿自動送出</label>
   </div>
+  <div class="check">
+    <input type="checkbox" id="pauseOthersOnWin">
+    <label for="pauseOthersOnWin">有分頁搶到後，其他分頁先停手</label>
+  </div>
+  <div class="hint" style="margin:-4px 0 12px 24px">
+    開兩個分頁搶不同場次時用。驗證碼一次只能打一個，先把搶到的那邊處理完。
+  </div>
+
+  <div id="wonBox" style="display:none">
+    <div class="warn" style="background:#e8f5e9;border-color:#a5d6a7;color:#1b5e20">
+      <b>🎫 已有分頁搶到</b><span id="wonInfo"></span><br>
+      其他分頁目前暫停中。
+    </div>
+    <button id="clearWon" style="background:#2e7d32;color:#fff">▶ 解除暫停（其他分頁繼續搶）</button>
+  </div>
 
   <div class="warn">
     <b>驗證碼要自己打</b>：本工具不辨識驗證碼、也不代填帳號密碼。<br>

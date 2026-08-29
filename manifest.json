@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "寬宏售票表單填寫輔助",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "協助在寬宏售票（kham.com.tw）填寫票區／張數／驗證碼欄位並顯示狀態；與該網站無隸屬關係。",
   "permissions": [
     "storage",
@@ -12,15 +12,23 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://kham.com.tw/*"],
-      "js": ["inject.js"],
+      "matches": [
+        "https://kham.com.tw/*"
+      ],
+      "js": [
+        "inject.js"
+      ],
       "run_at": "document_start",
       "world": "MAIN"
     },
     {
-      "matches": ["https://kham.com.tw/*"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
+      "matches": [
+        "https://kham.com.tw/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_end"
     }
   ],
   "action": {
@@ -30,11 +38,17 @@
   "background": {
     "service_worker": "background.js"
   },
-  "icons": { "128": "icon128.png" },
+  "icons": {
+    "128": "icon128.png"
+  },
   "web_accessible_resources": [
     {
-      "resources": ["icon128.png"],
-      "matches": ["https://kham.com.tw/*"]
+      "resources": [
+        "icon128.png"
+      ],
+      "matches": [
+        "https://kham.com.tw/*"
+      ]
     }
   ]
 }

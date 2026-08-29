@@ -33,6 +33,7 @@
     captchaLen: 4,           // 驗證碼位數，輸滿即送出
     autoSubmitCaptcha: true, // 驗證碼輸滿自動按「加入購物車」
     autoCheckout: false,     // 購物車頁自動按結帳
+    pauseOthersOnWin: true,  // 有分頁搶到後，其他分頁先停手（驗證碼一次只能打一個）
   };
   let S = Object.assign({}, DEFAULTS);
 
@@ -176,6 +177,15 @@
     return d.getTime();
   }
 
+  // 開賣後前 3 秒催快一點（最快 300ms），之後回到設定值
+  function gapMs() {
+    const ts = startTimestamp();
+    const base = Math.max(50, toInt(S.refreshMs, 800));
+    if (!ts) return base;
+    const since = Date.now() - ts;
+    return (since >= 0 && since < 3000) ? Math.min(base, 300) : base;
+  }
+
   function fmtCountdown(ms) {
     const s = Math.max(0, Math.ceil(ms / 1000));
     const hh = String(Math.floor(s / 3600)).padStart(2, '0');
@@ -229,7 +239,7 @@
             '時間一到才會開始按「立即購票」',
             document.hidden ? '⚠️ 分頁在背景，開賣瞬間可能慢約 1 秒' : '請保持此分頁在前景',
           ]);
-          await sleep(Math.min(500, Math.max(50, wait)));
+          await sleep(Math.min(500, wait));
           continue;
         }
 
@@ -244,7 +254,7 @@
           return;
         }
         renderProductPanel();
-        await sleep(Math.max(50, S.refreshMs));
+        await sleep(gapMs());
       }
     } finally {
       productState.running = false;
@@ -284,11 +294,13 @@
     showPanel(['● 場次頁', '→ ' + hit.text.slice(0, 60), auto ? '自動進入中…' : '手動模式不自動進入']);
     if (!auto) return;
     toast('進入場次：' + hit.text.slice(0, 40));
-    hit.el.click();
+    const m = /location\.href\s*=\s*'([^']+)'/.exec(hit.el.getAttribute('onclick') || '');
+    if (m) location.href = new URL(m[1], location.href).href;
+    else hit.el.click();
   }
 
   // ================================================================ 票區頁
-  const areaState = { scans: 0, running: false, stop: false, cooldown: {}, lastRows: [] };
+  const areaState = { scans: 0, running: false, stop: false, cooldown: {}, lastRows: [], firstScan: true };
 
   // GROUP_ID 藏在座位圖 area 的 Send/SendA 呼叫裡。
   // 注意：座位圖的 <map> 是頁面載入後才由網站補上的，重新 fetch 回來的 HTML 裡沒有，
@@ -310,6 +322,20 @@
       }
     });
     return gmap;
+  }
+
+  // tr 的 rel="a24 a25 a26" → 第一個 area 的編號就是 GROUP_ID
+  // （實測 FEniX 3 區、MUSIC EXPO 8 區全部吻合）
+  // rel 在原始 HTML 裡就有，不必等座位圖 ajax 補上 <map>，開賣瞬間可以省下數百毫秒到數秒
+  function groupFromRel(rel) {
+    const first = String(rel || '').trim().split(/\s+/)[0] || '';
+    const m = /^a(\d+)$/.exec(first);
+    return m ? m[1] : null;
+  }
+
+  // 有 ACTIVITY_GROUP 的活動（套票類）跳轉還要帶 ag/agi，那種只能等座位圖
+  function needsActivityGroup() {
+    return !!(hid('ACTIVITY_GROUP_ID') || hid('ACTIVITY_GROUP_ITEM_ID'));
   }
 
   const GMAP_KEY = 'kham_gmap_' + PERF_ID;
@@ -353,7 +379,10 @@
       if (/售完|額滿/.test(leftText)) left = 0;
       else if (/^[\d,]+$/.test(leftText.replace(/\s/g, ''))) left = toInt(leftText);
       else left = NaN;   // 主辦方關閉餘位顯示時只能試了才知道
-      return { id: tr.id, name, priceText, leftText, left, g: gmap[tr.id] || null };
+      const relGroup = groupFromRel(tr.getAttribute('rel'));
+      const g = gmap[tr.id]
+        || (relGroup != null ? { perf: PERF_ID, group: relGroup, ag: '', agi: '' } : null);
+      return { id: tr.id, name, priceText, leftText, left, g };
     }).filter((r) => r.id && r.name);
 
     const action = (doc.querySelector('#action') || {}).textContent || '';
@@ -466,18 +495,25 @@
             '目標：' + (parseList(S.targets).join('、') || '（未設定，抓第一個有票的）'),
             document.hidden ? '⚠️ 分頁在背景，開賣瞬間可能慢約 1 秒' : '請保持此分頁在前景',
           ]);
-          await sleep(Math.min(500, Math.max(50, wait)));
+          await sleep(Math.min(500, wait));
           continue;
         }
 
         areaState.scans++;
         let info = null;
         try {
-          info = await scanOnce();
+          if (areaState.firstScan && document.getElementById('salesTable')) {
+            // 進頁面當下的庫存就是最新的，先用它判一次，省掉一次往返
+            areaState.firstScan = false;
+            info = parseAreaDoc(document);
+            info.lost = false;
+          } else {
+            info = await scanOnce();
+          }
           areaState.lastRows = info.rows;
         } catch (e) {
-          renderAreaPanel(null, '查詢失敗，' + S.refreshMs + 'ms 後重試');
-          await sleep(Math.max(50, S.refreshMs));
+          renderAreaPanel(null, '查詢失敗，' + gapMs() + 'ms 後重試');
+          await sleep(gapMs());
           continue;
         }
 
@@ -487,7 +523,8 @@
         renderAreaPanel(info, hit ? '→ 前往 ' + hit.name : null);
 
         if (hit) {
-          if (!hit.g) hit.g = await waitGmap(hit.id);   // 座位圖還沒載入時等一下，避免 GROUP_ID 抓錯
+          // 一般活動的 GROUP_ID 已經從 rel 推出來了，不必等；只有套票類需要 ag/agi 才等座位圖
+          if (!hit.g || needsActivityGroup()) hit.g = (await waitGmap(hit.id)) || hit.g;
           sessionStorage.setItem('kham_area_url', location.href);
           sessionStorage.setItem('kham_last_area', JSON.stringify({ id: hit.id, name: hit.name, at: Date.now() }));
           const left = Number.isNaN(hit.left) ? '未顯示' : hit.left;
@@ -503,7 +540,7 @@
           location.href = buyUrl(hit);
           return;
         }
-        await sleep(Math.max(50, S.refreshMs));
+        await sleep(gapMs());
       }
     } finally {
       areaState.running = false;
@@ -675,6 +712,47 @@
     }
   }
 
+  // ================================================================ 跨分頁協調
+  // 兩個分頁分別搶不同場次時（例如 2/27 與 2/28），任一邊加入購物車成功後，
+  // 另一邊可以先停手 —— 驗證碼只有一雙手能打，兩邊同時跳出來只會兩頭空。
+  const TAB_TOKEN = (() => {
+    let t = sessionStorage.getItem('kham_tab_token');
+    if (!t) {
+      t = String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8);
+      sessionStorage.setItem('kham_tab_token', t);
+    }
+    return t;
+  })();
+  const WON_TTL = 10 * 60 * 1000;   // 超過 10 分鐘的「搶到」紀錄視同過期，不再壓住其他分頁
+
+  function markWon(info) {
+    try {
+      chrome.storage.local.set({ won: { at: Date.now(), by: TAB_TOKEN, info: String(info || '') } });
+    } catch (e) { /* 協調失敗不影響本分頁 */ }
+  }
+
+  function pauseForOtherTab(won) {
+    if (!S.pauseOthersOnWin) return false;
+    if (!won || won.by === TAB_TOKEN) return false;
+    if (Date.now() - (won.at || 0) > WON_TTL) return false;
+    areaState.stop = true;
+    productState.stop = true;
+    showPanel([
+      '⏸ 已暫停：另一個分頁搶到了',
+      won.info ? '對方：' + won.info : '',
+      '先去把那邊的驗證碼打完。要繼續搶這一場，',
+      '請開擴充功能面板按「解除暫停」。',
+    ].filter(Boolean));
+    toast('⏸ 另一個分頁已加入購物車，這一邊先停手');
+    return true;
+  }
+
+  function resumeAfterPause() {
+    if (!S.enabled) return;
+    if (PAGE === 'area' && !areaState.running) { areaState.stop = false; areaLoop(); }
+    if (PAGE === 'product' && !productState.running) { productState.stop = false; productLoop(); }
+  }
+
   // ================================================================ 網站訊息處理
   function handleAlert(text) {
     const t = String(text || '');
@@ -737,6 +815,7 @@
       notify('🎫 加入購物車成功', '請於保留時間內完成結帳');
       flashTitle('🎫 搶到票了！');
       showPanel(['✔ 已加入購物車', '正在前往購物車…']);
+      markWon((hid('AREA_NAME') || '') + '（' + (document.title || '') + '）');
     }
   }
 
@@ -759,6 +838,10 @@
 
   function start() {
     loadCooldown();
+    // 分頁後開的情況：先確認別的分頁是不是已經搶到了
+    try {
+      chrome.storage.local.get({ won: null }).then((r) => { pauseForOtherTab(r && r.won); });
+    } catch (e) {}
     if (PAGE === 'product') {
       renderProductPanel(S.enabled ? '啟動中…' : '主開關關閉，可按「立即執行」試一次');
       if (S.enabled) productLoop();
@@ -791,6 +874,11 @@
 
   // 主開關改動立即生效，不必重整
   chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local') {
+      // 另一個分頁搶到／被解除暫停
+      if (changes.won) { if (!pauseForOtherTab(changes.won.newValue)) resumeAfterPause(); }
+      return;
+    }
     if (area !== 'sync') return;
     Object.keys(changes).forEach((k) => { S[k] = changes[k].newValue; });
     if (PAGE === 'product') {

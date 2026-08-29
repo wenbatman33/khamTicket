@@ -13,12 +13,15 @@ const DEFAULTS = {
   captchaLen: 4,
   autoSubmitCaptcha: true,
   autoCheckout: false,
+  pauseOthersOnWin: true,
 };
 
 const ids = ['enabled', 'startAt', 'refreshMs', 'perfKeyword', 'targets', 'count', 'ticketType',
-  'acceptNonAdjacent', 'allowFewer', 'captchaLen', 'autoSubmitCaptcha', 'autoCheckout'];
+  'acceptNonAdjacent', 'allowFewer', 'captchaLen', 'autoSubmitCaptcha', 'autoCheckout',
+  'pauseOthersOnWin'];
 const els = {};
-ids.concat(['masterBox', 'masterState', 'save', 'run', 'status']).forEach((k) => {
+ids.concat(['masterBox', 'masterState', 'save', 'run', 'status',
+  'wonBox', 'wonInfo', 'clearWon']).forEach((k) => {
   els[k] = document.getElementById(k);
 });
 
@@ -45,7 +48,28 @@ chrome.storage.sync.get(DEFAULTS).then((s) => {
   els.captchaLen.value = String(parseInt(s.captchaLen, 10) || 4);
   els.autoSubmitCaptcha.checked = !!s.autoSubmitCaptcha;
   els.autoCheckout.checked = !!s.autoCheckout;
+  els.pauseOthersOnWin.checked = !!s.pauseOthersOnWin;
   renderMaster();
+});
+
+// 有分頁搶到時顯示狀態與解除按鈕（10 分鐘後視同過期）
+function renderWon() {
+  chrome.storage.local.get({ won: null }).then((r) => {
+    const w = r && r.won;
+    const fresh = w && Date.now() - (w.at || 0) < 10 * 60 * 1000;
+    els.wonBox.style.display = fresh ? 'block' : 'none';
+    if (fresh) {
+      const t = new Date(w.at).toLocaleTimeString();
+      els.wonInfo.textContent = '（' + t + (w.info ? '｜' + String(w.info).slice(0, 30) : '') + '）';
+    }
+  });
+}
+renderWon();
+
+els.clearWon.addEventListener('click', async () => {
+  await chrome.storage.local.remove('won');
+  renderWon();
+  flash('▶ 已解除暫停，其他分頁會繼續搶');
 });
 
 els.startAt.addEventListener('input', renderMaster);
@@ -72,6 +96,7 @@ function collect() {
     captchaLen: Math.max(1, n(els.captchaLen, 4)),
     autoSubmitCaptcha: els.autoSubmitCaptcha.checked,
     autoCheckout: els.autoCheckout.checked,
+    pauseOthersOnWin: els.pauseOthersOnWin.checked,
   };
 }
 
