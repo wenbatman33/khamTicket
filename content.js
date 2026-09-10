@@ -25,6 +25,7 @@
     startAt: '',             // 開搶時間 HH:MM(:SS)，留空 = 進頁面就開始
     refreshMs: 800,          // 重試間隔（毫秒）
     perfKeyword: '',         // 場次關鍵字（多場次時用，如 2/27），留空 = 第一個可訂購的
+    presaleCode: '',         // 優先購序號／認證碼：場次頁跳燈箱時自動填入，照原樣填不裁切
     targets: '',             // 票區優先順序，一行一個
     count: 2,                // 每次買幾張
     ticketType: '',          // 票種優先順序（逗號分隔），留空 = 用第一種
@@ -75,6 +76,80 @@
   const toInt = (v, d = 0) => { const n = parseInt(String(v).replace(/[^\d-]/g, ''), 10); return Number.isFinite(n) ? n : d; };
 
   function log(...a) { try { console.log('[寬宏輔助]', ...a); } catch (e) {} }
+
+  // ---------------------------------------------------------------- 搶票紀錄
+  // 每個分頁寫自己的 key，兩個分頁同時搶不同場次也不會互相覆蓋。
+  // 關鍵事件（請求／回應／跳轉）立即寫入，庫存快照批次寫，避免拖慢開賣瞬間。
+  const TAB_TOKEN = (() => {
+    let t = sessionStorage.getItem('kham_tab_token');
+    if (!t) {
+      t = String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8);
+      sessionStorage.setItem('kham_tab_token', t);
+    }
+    return t;
+  })();
+  const LOG_KEY = 'log_' + TAB_TOKEN;
+  const LOG_MAX = 3000;          // 每分頁保留最近 3000 筆
+  const STOCK_HEARTBEAT = 30000; // 庫存沒變化時，至少每 30 秒留一筆
+  let logBuf = [];
+  let logTimer = null;
+  let lastStockSig = '';
+  let lastStockAt = 0;
+  let areasLogged = false;
+
+  function logEvent(type, data, urgent) {
+    try {
+      logBuf.push(Object.assign({ t: Date.now(), page: PAGE, type }, data || {}));
+      if (urgent) flushLog();
+      else if (!logTimer) logTimer = setTimeout(flushLog, 2000);
+    } catch (e) { /* 記錄失敗不影響搶票 */ }
+  }
+
+  async function flushLog() {
+    clearTimeout(logTimer); logTimer = null;
+    if (!logBuf.length) return;
+    const batch = logBuf; logBuf = [];
+    try {
+      const r = await chrome.storage.local.get({ [LOG_KEY]: null });
+      const cur = (r && r[LOG_KEY]) || { tab: TAB_TOKEN, startedAt: Date.now(), rows: [] };
+      cur.rows = (cur.rows || []).concat(batch).slice(-LOG_MAX);
+      cur.updatedAt = Date.now();
+      cur.url = location.href;
+      await chrome.storage.local.set({ [LOG_KEY]: cur });
+    } catch (e) { /* 空間滿或寫入失敗都不影響搶票 */ }
+  }
+
+  // 頁面要跳走了，先把緩衝寫出去（票區頁→張數頁會換頁，記憶體會清掉）
+  window.addEventListener('pagehide', flushLog);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushLog(); });
+
+  // 全場票區餘位快照：有變化才記一筆，沒變化每 30 秒留一筆心跳。
+  // 票區名稱只在第一筆記一次（areas），之後快照只存 [票區ID, 數量]，
+  // 否則大場館 40+ 區每輪全記，很快就把 storage 撐爆。
+  function logStock(info) {
+    const rows = info.rows || [];
+    if (!rows.length) return;
+    const sig = rows.map((r) => r.id + '=' + r.leftText).join('|');
+    const now = Date.now();
+    const changed = sig !== lastStockSig;
+    if (!changed && now - lastStockAt < STOCK_HEARTBEAT) return;
+
+    if (!areasLogged) {
+      areasLogged = true;
+      logEvent('areas', {
+        perf: PERF_ID, product: PRODUCT_ID,
+        list: rows.map((r) => ({ id: r.id, name: r.name, price: r.priceText })),
+      }, true);
+    }
+    lastStockSig = sig; lastStockAt = now;
+    logEvent('stock', {
+      scan: areaState.scans,
+      perf: PERF_ID,
+      status: info.action || '',
+      changed,
+      s: rows.map((r) => [r.id, Number.isNaN(r.left) ? r.leftText : r.left]),
+    });
+  }
 
   function notify(title, body) {
     try { chrome.runtime.sendMessage({ type: 'NOTIFY', title, body }); } catch (e) {}
@@ -272,31 +347,129 @@
     return ((n || el).innerText || '').replace(/\s+/g, ' ').trim();
   }
 
+  // 場次頁按鈕有兩種：
+  //   一般販售：onclick='doLink("UTK0201_000.aspx?…",3704)'  → 網站會先空等 3.7 秒才跳，我們直接取網址跳
+  //   優先購：  onclick='VipSellCheck("PERF_ID")'            → 會跳燈箱要序號，之後由網站導向票區頁
   function perfCandidates() {
     return [...document.querySelectorAll('button,a,input[type=submit]')]
-      .filter((b) => /UTK0204_|UTK0201_000/i.test((b.getAttribute('onclick') || '') + (b.getAttribute('href') || '')))
-      .map((b) => ({ el: b, text: perfRowText(b) }));
+      .map((b) => {
+        const oc = (b.getAttribute('onclick') || '') + ' ' + (b.getAttribute('href') || '');
+        const url = (/(?:doLink|location\.href)\s*[(=]\s*["']([^"']*UTK020[^"']*)["']/.exec(oc) || [])[1];
+        if (url) return { el: b, mode: 'link', url, text: perfRowText(b) };
+        if (/VipSellCheck/.test(oc)) return { el: b, mode: 'vip', text: perfRowText(b) };
+        return null;
+      })
+      .filter(Boolean);
   }
 
+  const WHEELCHAIR = /輪椅/;
+
   function runPerf(auto) {
-    const list = perfCandidates();
+    let list = perfCandidates();
     if (!list.length) {
       showPanel(['● 場次頁', '⚠️ 找不到可訂購的場次', '可能尚未開賣或該場次已售完']);
       return;
     }
     const k = norm(S.perfKeyword);
+    // 輪椅場跟一般場常常同日同時間，關鍵字對得到兩個；沒指定「輪椅」就一律排除
+    if (!WHEELCHAIR.test(S.perfKeyword || '')) {
+      const normal = list.filter((x) => !WHEELCHAIR.test(x.text));
+      if (normal.length) list = normal;
+    }
     const hit = k ? list.find((x) => norm(x.text).includes(k)) : list[0];
     if (!hit) {
       showPanel(['● 場次頁', '⚠️ 沒有符合「' + S.perfKeyword + '」的場次', '共 ' + list.length + ' 個可訂購場次']);
       toast('⚠️ 找不到符合「' + S.perfKeyword + '」的場次');
       return;
     }
-    showPanel(['● 場次頁', '→ ' + hit.text.slice(0, 60), auto ? '自動進入中…' : '手動模式不自動進入']);
+    showPanel(['● 場次頁', '→ ' + hit.text.slice(0, 60),
+      hit.mode === 'vip' ? '此場次為優先購，會跳出序號燈箱' : '',
+      auto ? '自動進入中…' : '手動模式不自動進入'].filter(Boolean));
+    logEvent('perf', { mode: hit.mode, text: hit.text.slice(0, 80), url: hit.url || '' }, true);
     if (!auto) return;
     toast('進入場次：' + hit.text.slice(0, 40));
-    const m = /location\.href\s*=\s*'([^']+)'/.exec(hit.el.getAttribute('onclick') || '');
-    if (m) location.href = new URL(m[1], location.href).href;
-    else hit.el.click();
+    if (hit.mode === 'link') {
+      location.href = new URL(hit.url, location.href).href;   // 跳過網站的 3.7 秒空等
+      return;
+    }
+    hit.el.click();          // 優先購：由網站自己去查認證設定、開燈箱
+    watchPresaleBox();
+  }
+
+  // ---------------------------------------------------------------- 優先購燈箱
+  // 燈箱：.popoutBG 內 #ID1（序號／卡號）、#TR2 > #ID2（第二欄，只有部分認證方式才有）、
+  // 送出按鈕 onclick="DoVIPLogin()"。序號一經使用即失效，所以只照原樣填、不做任何裁切。
+  const presaleState = { filled: false, submitted: false, watching: false };
+
+  function presaleBoxVisible() {
+    const box = document.querySelector('.popoutBG');
+    const id1 = document.getElementById('ID1');
+    return !!(box && box.offsetParent !== null && id1 && id1.offsetParent !== null);
+  }
+
+  function presaleSubmit(reason) {
+    if (presaleState.submitted) return;
+    const id1 = document.getElementById('ID1');
+    if (!id1 || !id1.value.trim()) { toast('⚠️ 請先輸入序號'); return; }
+    const tr2 = document.getElementById('TR2');
+    const id2 = document.getElementById('ID2');
+    if (tr2 && tr2.offsetParent !== null && id2 && !id2.value.trim()) {
+      toast('⚠️ 這個認證還需要第二欄（' + ((document.getElementById('L_ID2') || {}).textContent || '密碼') + '），請自行輸入後按送出');
+      try { id2.focus(); } catch (e) {}
+      return;
+    }
+    presaleState.submitted = true;
+    logEvent('presale_submit', { reason, label: (document.getElementById('L_ID1') || {}).textContent || '', len: id1.value.length }, true);
+    toast('送出優先購認證（' + reason + '）');
+    const btn = [...document.querySelectorAll('.popoutBG button')].find((b) => /DoVIPLogin/.test(b.getAttribute('onclick') || ''));
+    if (btn) btn.click();
+    // 網站送出前還會自己等 maxWaitTime（實測 3.7 秒），這段不動它
+    setTimeout(() => { presaleState.submitted = false; }, 8000);
+  }
+
+  function fillPresaleBox() {
+    const id1 = document.getElementById('ID1');
+    if (!id1) return;
+    const title = ((document.querySelector('.popoutBG .eventTitle') || {}).textContent || '').trim();
+    const label = ((document.getElementById('L_ID1') || {}).textContent || '').trim();
+    const tr2 = document.getElementById('TR2');
+    const needTwo = !!(tr2 && tr2.offsetParent !== null);
+    const code = String(S.presaleCode || '').trim();
+    logEvent('presale_box', { title, label, needTwo, hasCode: !!code }, true);
+
+    if (!id1.__khamBound) {
+      id1.__khamBound = true;
+      id1.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); presaleSubmit('Enter'); } });
+    }
+    if (!code) {
+      showPanel(['● 優先購燈箱', title, '欄位：' + (label || '序號'), '⚠️ 設定裡沒有填序號，請自行輸入後按送出（或按 Enter）']);
+      toast('⚠️ 未設定優先購序號，請自行輸入');
+      try { id1.focus(); } catch (e) {}
+      return;
+    }
+    id1.value = code;
+    id1.dispatchEvent(new Event('input', { bubbles: true }));
+    id1.dispatchEvent(new Event('change', { bubbles: true }));
+    presaleState.filled = true;
+    showPanel(['● 優先購燈箱', title, '欄位：' + (label || '序號') + ' → 已填 ' + code.length + ' 碼',
+      needTwo ? '⚠️ 還有第二欄要填，請自行輸入後按送出' : (S.enabled ? '自動送出中…' : '手動模式：請自行按送出')]);
+    if (needTwo) { try { document.getElementById('ID2').focus(); } catch (e) {} return; }
+    if (S.enabled) presaleSubmit('序號已填');
+  }
+
+  function watchPresaleBox(timeout = 30000) {
+    if (presaleState.watching) return;
+    presaleState.watching = true;
+    const t0 = Date.now();
+    const timer = setInterval(() => {
+      if (presaleBoxVisible()) {
+        clearInterval(timer); presaleState.watching = false;
+        fillPresaleBox();
+      } else if (Date.now() - t0 > timeout) {
+        clearInterval(timer); presaleState.watching = false;
+        showPanel(['● 場次頁', '⚠️ 等了 30 秒沒看到序號燈箱', '可能網站直接導向了，或認證設定不同；請看畫面']);
+      }
+    }, 100);
   }
 
   // ================================================================ 票區頁
@@ -449,6 +622,7 @@
 
   // session 失效：停手並要使用者從節目頁重新進來，不自作主張亂跳
   function onSessionLost() {
+    logEvent('lost', { url: location.href }, true);
     areaState.stop = true;
     showPanel([
       '⚠️ 購票流程已失效',
@@ -511,7 +685,9 @@
             info = await scanOnce();
           }
           areaState.lastRows = info.rows;
+          logStock(info);
         } catch (e) {
+          logEvent('error', { where: 'scan', msg: String(e && e.message || e) }, true);
           renderAreaPanel(null, '查詢失敗，' + gapMs() + 'ms 後重試');
           await sleep(gapMs());
           continue;
@@ -528,6 +704,11 @@
           sessionStorage.setItem('kham_area_url', location.href);
           sessionStorage.setItem('kham_last_area', JSON.stringify({ id: hit.id, name: hit.name, at: Date.now() }));
           const left = Number.isNaN(hit.left) ? '未顯示' : hit.left;
+          logEvent('pick', {
+            id: hit.id, name: hit.name, left: hit.leftText,
+            group: hit.g ? hit.g.group : null,
+            go: AREA_FLAVOR === 'seatpick' ? 'UTK0205_(自行選位)' : buyUrl(hit),
+          }, true);
           if (AREA_FLAVOR === 'seatpick') {
             // 這條流程沒有電腦配位，只能進選位頁自己勾座位
             toast('找到票區：' + hit.name + '（餘 ' + left + '）\n這個活動只能自行選位，座位請自己勾');
@@ -569,8 +750,15 @@
   }
 
   // 依票種優先順序挑一種：完全相符優先於包含，都沒對上就用第一種
+  const SPECIAL_TYPE = /身障|身心障礙|陪同|輪椅/;
+
   function pickType(list) {
     const prefs = String(S.ticketType || '').split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+    // 「身心障礙票」「身障陪同票」入場要證明，沒在優先順序裡點名就不碰
+    if (!prefs.some((p) => SPECIAL_TYPE.test(p))) {
+      const normal = list.filter((t) => !SPECIAL_TYPE.test(t.name));
+      if (normal.length) list = normal;
+    }
     for (const p of prefs) {
       const k = norm(p);
       const exact = list.find((t) => norm(t.name) === k);
@@ -588,7 +776,10 @@
       name: (document.getElementById(id + '_NAME') || {}).value || id,
       box: document.querySelector("input[KEY='" + id + "']"),
     })).filter((t) => t.box);
-    if (!list.length) return { ok: false, msg: '找不到張數欄位' };
+    if (!list.length) {
+      const soldOut = [...document.querySelectorAll('.mui-numbox')].some((d) => /售完|額滿/.test(d.textContent));
+      return soldOut ? { ok: false, msg: '這一區所有票種都已售完', few: true } : { ok: false, msg: '找不到張數欄位' };
+    }
 
     const limit = toInt(hid('QUANTITY_LIMIT'), 0) || 8;
     const last = toInt(hid('LAST_AMOUNT'), 0);
@@ -648,6 +839,18 @@
     const chk = document.getElementById('CHK');
     if (chk && !chk.value.trim()) { toast('⚠️ 請先輸入驗證碼'); return; }
     qtyState.submitted = true;
+    logEvent('submit', {
+      reason,
+      area: hid('AREA_NAME'),
+      perf: PERF_ID,
+      amounts: [...document.querySelectorAll("input[KEY='TYPE_ID']")].map((i) => ({
+        type: i.value,
+        name: (document.getElementById(i.value + '_NAME') || {}).value || '',
+        n: (document.querySelector("input[KEY='" + i.value + "']") || {}).value || '0',
+      })),
+      atype: !!(document.getElementById('ATYPE') || {}).checked,
+      captchaLen: ((document.getElementById('CHK') || {}).value || '').length,
+    }, true);
     toast('送出：加入購物車（' + reason + '）');
     // 呼叫網站原有的 addShoppingCart()；先試按鈕，退而求其次請 inject 代呼叫
     const btn = [...document.querySelectorAll('button,input[type=submit]')]
@@ -686,12 +889,18 @@
   function runQty() {
     const r = fillQty();
     if (!r.ok) {
+      logEvent('fill_fail', { area: hid('AREA_NAME'), msg: r.msg, last: hid('LAST_AMOUNT') }, true);
       renderQtyPanel('⚠️ ' + r.msg);
       toast('⚠️ ' + r.msg);
       if (S.enabled && r.few) backToArea(r.msg, 300);
       return;
     }
     qtyState.filled = true;
+    logEvent('fill', {
+      area: hid('AREA_NAME'), type: r.type, want: r.want,
+      last: hid('LAST_AMOUNT'), limit: hid('QUANTITY_LIMIT'),
+      loggedOut: loggedOut(),
+    }, true);
     setupCaptcha();
     renderQtyPanel('✔ ' + r.msg);
     toast('✔ ' + r.msg + '\n請輸入驗證碼' + (S.autoSubmitCaptcha ? '（輸滿自動送出）' : ''));
@@ -715,14 +924,6 @@
   // ================================================================ 跨分頁協調
   // 兩個分頁分別搶不同場次時（例如 2/27 與 2/28），任一邊加入購物車成功後，
   // 另一邊可以先停手 —— 驗證碼只有一雙手能打，兩邊同時跳出來只會兩頭空。
-  const TAB_TOKEN = (() => {
-    let t = sessionStorage.getItem('kham_tab_token');
-    if (!t) {
-      t = String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8);
-      sessionStorage.setItem('kham_tab_token', t);
-    }
-    return t;
-  })();
   const WON_TTL = 10 * 60 * 1000;   // 超過 10 分鐘的「搶到」紀錄視同過期，不再壓住其他分頁
 
   function markWon(info) {
@@ -758,11 +959,18 @@
     const t = String(text || '');
     if (!t) return;
     log('網站提示：', t);
+    logEvent('alert', { text: t }, true);
     if (PAGE === 'product') {
       // 開賣前每輪都會跳一次，只更新面板並把對話框關掉，不洗版
       productState.lastMsg = t;
       renderProductPanel();
       setTimeout(dismissDialog, 150);
+      return;
+    }
+    if (PAGE === 'perf' && presaleBoxVisible()) {
+      presaleState.submitted = false;
+      toast('⚠️ ' + t + '\n請檢查序號（全半形、大小寫）後重新送出');
+      try { document.getElementById('ID1').focus(); } catch (e) {}
       return;
     }
     if (/驗證碼/.test(t)) {
@@ -788,19 +996,40 @@
     toast('網站提示：' + t);
   }
 
+  // 網站很多回應長這樣：showProcess();setTimeout(function(){top.location.href = 'X';}, 3260);
+  // 目的地已經決定了，空等只是它的節流；我們直接過去
+  function jumpEarly(body) {
+    const b = String(body || '');
+    if (!/setTimeout/.test(b)) return false;
+    const m = /location\.href\s*=\s*['"]([^'"]+)['"]/.exec(b);
+    if (!m) return false;
+    const url = new URL(m[1], location.href).href;
+    logEvent('jump', { url }, true);
+    location.href = url;
+    return true;
+  }
+
   function handleXhr(d) {
     if (!d) return;
+    // 購票流程的請求全記：送出參數（帳密已在 inject.js 遮蔽）與伺服器回應原文
+    logEvent('xhr', {
+      url: d.url, method: d.method || '', action: d.action || '',
+      status: d.status, ms: d.ms,
+      sent: String(d.sent || '').slice(0, 2000),
+      resp: String(d.text || '').slice(0, 1500),
+    }, true);
     if (/GOBUY/i.test(d.action || '')) {
       productState.lastRespAt = Date.now();
       const body = String(d.text || '');
       if (/location/i.test(body)) {
-        // 網站回傳導向指令 = 已啟售，接下來由網站自己帶到場次／票區頁
+        // 網站回傳導向指令 = 已啟售；網址就在回應裡，不等它的 setTimeout
         productState.stop = true;
         productState.lastMsg = '已啟售，進入購票流程';
         toast('🎫 已啟售，進入購票流程');
         notify('🎫 開賣了', '節目已啟售，正在進入購票流程');
         flashTitle('🎫 開賣了！');
         renderProductPanel();
+        if (S.enabled) jumpEarly(body);
         return;
       }
       const m = /alert1\(\s*'([^']*)'/.exec(body);
@@ -808,14 +1037,35 @@
       renderProductPanel();
       return;
     }
+    if (/DO_FIRST_Click|GET_FIRST_INFO/i.test(d.action || '')) {
+      const body = String(d.text || '');
+      presaleState.submitted = false;
+      if (/location/i.test(body)) {
+        logEvent('presale_ok', {}, true);
+        toast('✔ 優先購認證通過，進入票區頁');
+        if (S.enabled) jumpEarly(body);
+      }
+      // 認證失敗會走 alert1，由 handleAlert 顯示
+      return;
+    }
     if (!/ADD_SHOPPING_CAR/i.test(d.action || '')) return;
     const body = String(d.text || '');
+    // 新版 UTK0201_001.min.js 的 error callback 是空的，失敗時不會有任何提示；
+    // 回應沒有導向也沒有 alert 就當失敗，立刻解鎖讓你能再送
+    if (!/location/i.test(body) && !/alert1?\(/.test(body)) {
+      qtyState.submitted = false;
+      window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'RESET_CLICK' }, location.origin);
+      toast('⚠️ 送出沒有回應（HTTP ' + d.status + '），可再試一次');
+      return;
+    }
     if (/location/i.test(body)) {
       // 網站回傳導向指令 = 已加入購物車
       notify('🎫 加入購物車成功', '請於保留時間內完成結帳');
       flashTitle('🎫 搶到票了！');
       showPanel(['✔ 已加入購物車', '正在前往購物車…']);
+      logEvent('won', { area: hid('AREA_NAME'), perf: PERF_ID, product: PRODUCT_ID }, true);
       markWon((hid('AREA_NAME') || '') + '（' + (document.title || '') + '）');
+      if (S.enabled) jumpEarly(body);
     }
   }
 
@@ -838,6 +1088,7 @@
 
   function start() {
     loadCooldown();
+    logEvent('nav', { url: location.href, title: document.title, flavor: PAGE === 'area' ? AREA_FLAVOR : '' }, true);
     // 分頁後開的情況：先確認別的分頁是不是已經搶到了
     try {
       chrome.storage.local.get({ won: null }).then((r) => { pauseForOtherTab(r && r.won); });
@@ -846,7 +1097,7 @@
       renderProductPanel(S.enabled ? '啟動中…' : '主開關關閉，可按「立即執行」試一次');
       if (S.enabled) productLoop();
     } else if (PAGE === 'perf') {
-      runPerf(S.enabled);
+      if (presaleBoxVisible()) fillPresaleBox(); else runPerf(S.enabled);
     } else if (PAGE === 'area') {
       sessionStorage.setItem('kham_area_url', location.href);
       currentGmap();
@@ -898,7 +1149,7 @@
       if (S.enabled) { productState.stop = false; productLoop(); }
       else { productState.tries++; dismissDialog(); clickGoBuy(); renderProductPanel('已試一次'); }
     } else if (PAGE === 'perf') {
-      runPerf(true);
+      if (presaleBoxVisible()) fillPresaleBox(); else runPerf(true);
     } else if (PAGE === 'area') {
       if (S.enabled) { areaState.stop = false; areaLoop(); } else areaRunOnce();
     } else if (PAGE === 'qty') {

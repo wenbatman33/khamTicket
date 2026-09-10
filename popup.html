@@ -54,6 +54,7 @@
     font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 6px;
   }
   #save { background: #c8102e; color: #fff; }
+  .mini { flex:1; padding:7px 4px; font-size:12px; background:#c8102e; color:#fff; margin-bottom:0; }
   #run { background: #eee; color: #333; }
   #status { font-size: 12px; color: #2e7d32; min-height: 18px; text-align: center; }
 </style>
@@ -83,9 +84,15 @@
   </div>
 
   <div class="field">
-    <label for="perfKeyword">場次關鍵字</label>
-    <input type="text" id="perfKeyword" placeholder="2/27（多場次時用，留空 = 第一個可訂購的）">
-    <div class="hint">只有一個場次就留空。比對場次列的日期文字。</div>
+    <label for="presaleCode">優先購序號／認證碼</label>
+    <input type="text" id="presaleCode" placeholder="預購序號、中信卡號前幾碼…（一般販售留空）">
+    <div class="hint">優先購期間場次頁會跳燈箱要序號，工具會照原樣填入並送出，<b>不做任何裁切</b>（序號一經使用即失效，請留意全半形與大小寫）。燈箱若還有第二欄（密碼類），會停下來讓你自己填。</div>
+  </div>
+
+  <div class="field">
+    <label for="perfKeyword">場次關鍵字（通常留空）</label>
+    <input type="text" id="perfKeyword" placeholder="留空 = 第一個可訂購的場次">
+    <div class="hint">一個商品頁多場次時才用（填 <code>2/27</code> 這種）。輪椅場預設排除，除非你填「輪椅」。</div>
   </div>
 
   <div class="section">
@@ -156,6 +163,18 @@
       <div class="hint">結帳流程請自行確認金額與場次後再付款。</div>
     </div>
   </details>
+
+  <div class="section" style="border-color:#dde6ea;background:#f4fafc">
+    <div class="section-title">搶票紀錄</div>
+    <div class="section-note" id="logStat">讀取中…</div>
+    <div style="display:flex;gap:6px;margin-bottom:6px">
+      <button id="expJson" class="mini">📥 完整 JSON</button>
+      <button id="expStock" class="mini">📊 票源 CSV</button>
+      <button id="expReq" class="mini">📋 請求 CSV</button>
+    </div>
+    <button id="clearLog" class="mini" style="background:#eee;color:#666">🗑 清除紀錄</button>
+    <div class="hint">紀錄含每輪全場各票區餘位、每一筆購票請求的送出參數與伺服器回應。帳號與密碼欄位在寫入前已遮蔽為 <code>***</code>。</div>
+  </div>
 
   <button id="save">💾 儲存設定</button>
   <button id="run">▶ 在目前分頁立即執行</button>
