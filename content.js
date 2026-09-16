@@ -276,6 +276,45 @@
     return false;
   }
 
+  // 網站在頁面載入時常跳一個「訊息視窗」（實名制提醒之類），每頁都要按一次 Ok 很煩。
+  // 進頁面後監看 10 秒，這類提示自動關掉；帶錯誤字眼的（售完／帳號／驗證碼…）留著給人看。
+  // 只認網站真正的錯誤句型；不能用「帳號」「密碼」這種字，實名制提醒裡就有「會員帳號」
+  const NOTICE_SKIP = /必須填寫|請輸入|認證|錯誤|失敗|售完|額滿|逾時|驗證碼|尚未啟售|不足|超過|無法|已無|重新/;
+  const isShown = (el) => {
+    if (!el) return false;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  function autoDismissNotice(windowMs = 10000) {
+    const t0 = Date.now();
+    const seen = new Set();
+    const check = () => {
+      const dlg = document.querySelector('.ui-dialog');
+      const msg = document.getElementById('dialog-message');
+      if (dlg && msg && isShown(dlg)) {
+        const text = (msg.textContent || '').replace(/\s+/g, ' ').trim();
+        if (text && !seen.has(text) && !NOTICE_SKIP.test(text)) {
+          seen.add(text);
+          if (dismissDialog()) {
+            logEvent('notice_dismissed', { text: text.slice(0, 120) }, false);
+            toast('已關閉網站提示：' + text.slice(0, 40) + (text.length > 40 ? '…' : ''), 2500);
+          }
+        }
+      }
+      // 張數頁／選位頁的「本次不再提醒」小視窗，點掉後網站會記在 sessionStorage 不再跳
+      const tip = document.getElementById('POPOUT_TIP');
+      if (tip && isShown(tip)) {
+        const b = [...tip.querySelectorAll('button')].find((x) => /closeRemind/.test(x.getAttribute('onclick') || ''))
+          || [...tip.querySelectorAll('button')].find((x) => /知道了/.test(x.textContent || ''));
+        if (b) { b.click(); logEvent('notice_dismissed', { text: 'POPOUT_TIP' }, false); }
+      }
+      if (Date.now() - t0 < windowMs) setTimeout(check, 150);
+    };
+    check();
+  }
+
   // ================================================================ 節目頁（開賣前等待啟售）
   // 開賣前按「立即購票」，伺服器只會回 alert1('節目尚未啟售！')，
   // 這時候連 PERFORMANCE_ID 都拿不到，票區頁也進不去，只能在這頁等到啟售。
@@ -1089,6 +1128,7 @@
   function start() {
     loadCooldown();
     logEvent('nav', { url: location.href, title: document.title, flavor: PAGE === 'area' ? AREA_FLAVOR : '' }, true);
+    autoDismissNotice();
     // 分頁後開的情況：先確認別的分頁是不是已經搶到了
     try {
       chrome.storage.local.get({ won: null }).then((r) => { pauseForOtherTab(r && r.won); });
