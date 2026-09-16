@@ -35,6 +35,8 @@
     autoSubmitCaptcha: true, // 驗證碼輸滿自動按「加入購物車」
     autoCheckout: false,     // 購物車頁自動按結帳
     pauseOthersOnWin: true,  // 有分頁搶到後，其他分頁先停手（驗證碼一次只能打一個）
+    hideSoldOut: true,       // 票區頁自動勾「僅顯示未完售區」
+    pickMostSeats: true,     // 同一優先順序對到多個票區時，選空位最多的
   };
   let S = Object.assign({}, DEFAULTS);
 
@@ -641,7 +643,7 @@
       const priceText = c[2] ? c[2].textContent.trim() : '';
       const leftText = c[3] ? c[3].textContent.trim() : '';
       let left;
-      if (/售完|額滿/.test(leftText)) left = 0;
+      if (/售完|額滿/.test(leftText) || /\bSoldout\b/i.test(tr.className || '')) left = 0;
       else if (/^[\d,]+$/.test(leftText.replace(/\s/g, ''))) left = toInt(leftText);
       else left = NaN;   // 主辦方關閉餘位顯示時只能試了才知道
       const relGroup = groupFromRel(tr.getAttribute('rel'));
@@ -671,10 +673,29 @@
     }
     for (const t of targets) {
       const key = norm(t);
-      const hit = rows.filter((r) => norm(r.name).includes(key)).find(ok);
-      if (hit) return hit;
+      const cands = rows.filter((r) => norm(r.name).includes(key) && ok(r));
+      if (!cands.length) continue;
+      if (!S.pickMostSeats) return cands[0];
+      // 「VIP2」對到 VIP2 A～H 好幾區時，挑空位最多的那區：配位成功率最高，也最可能連位
+      return cands.reduce((best, r) => {
+        const a = Number.isNaN(r.left) ? -1 : r.left, b = Number.isNaN(best.left) ? -1 : best.left;
+        return a > b ? r : best;
+      }, cands[0]);
     }
     return null;
+  }
+
+  // 「僅顯示未完售區」：網站的 handler 綁在 DOM ready 之後，這裡直接設 checked 並把售完列藏起來，
+  // 之後網站 refreshArea() 重畫表格時會看 checked 狀態自己維持
+  function applyHideSoldOut() {
+    if (!S.hideSoldOut) return;
+    const box = document.querySelector('#AREA_DIV .fix-checkbox input[type=checkbox], #AREA_DIV input[type=checkbox]');
+    if (!box) return;
+    if (!box.checked) box.checked = true;
+    document.querySelectorAll('#salesTable tr.status_tr').forEach((tr) => {
+      const c = tr.cells[3];
+      if (/\bSoldout\b/i.test(tr.className) || (c && /售完|額滿/.test(c.textContent))) tr.style.display = 'none';
+    });
   }
 
   function buyUrl(row) {
@@ -701,15 +722,66 @@
     location.href = 'UTK0205_.aspx?' + p.toString();
   }
 
-  // 只讀票區頁 HTML 取庫存，不整頁重載（省下約 1 秒）
-  // 這些頁面綁 session 的購票流程狀態，狀態一壞就會被導回首頁，這裡要認出來
-  async function scanOnce() {
+  // 庫存查詢優先走網站「更新票數」按鈕用的端點 DO_REFRESH_AREA：
+  //   回 JSON（含 RND_GROUP_ID、SOLD_OUT、AMOUNT），實測 45ms／14.6KB，整頁 HTML 是 85ms／40KB，
+  //   而且售完的區也列出來，全場紀錄才完整。失敗就退回抓整頁 HTML。
+  let refreshBroken = 0;
+  async function scanViaRefresh() {
+    const body = new URLSearchParams({
+      PERFORMANCE_ID: PERF_ID,
+      ACTIVITY_GROUP_ID: hid('ACTIVITY_GROUP_ID') || '',
+      action: 'DO_REFRESH_AREA',
+      sender: 'jquery',
+    });
+    const res = await fetch(location.pathname, {
+      method: 'POST', credentials: 'include', cache: 'no-store',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
+      body: body.toString(),
+    });
+    const text = await res.text();
+    if (/UTK0101|UTK1301/i.test(res.url || '')) return { rows: [], action: '', lost: true };
+    const m = /SetArea\((\[[\s\S]*\])\)/.exec(text);
+    if (!m) throw new Error('no SetArea: ' + text.slice(0, 80));
+    const arr = JSON.parse(m[1]);
+    const rows = arr.map((a) => {
+      const leftText = String(a.AMOUNT == null ? '' : a.AMOUNT).trim();
+      let left;
+      if (a.SOLD_OUT || /售完|額滿/.test(leftText)) left = 0;
+      else if (/^[\d,]+$/.test(leftText)) left = toInt(leftText);
+      else left = NaN;
+      const group = String(a.RND_GROUP_ID != null ? a.RND_GROUP_ID : groupFromRel(a.GROUP_ID) || '');
+      return {
+        id: a.PERFORMANCE_PRICE_AREA_ID, name: String(a.NAME_INFO || a.NAME || '').trim(),
+        priceText: String(a.PRICE_STR || ''), leftText, left,
+        g: { perf: PERF_ID, group, ag: '', agi: '' },
+      };
+    }).filter((r) => r.id && r.name);
+    return { rows, action: '', lost: false, via: 'refresh' };
+  }
+
+  async function scanViaHtml() {
     const res = await fetch(areaPageUrl(), { credentials: 'include', cache: 'no-store' });
     const html = await res.text();
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const info = parseAreaDoc(doc);
     info.lost = /UTK0101|UTK1301/i.test(res.url || '') || !doc.getElementById('salesTable');
+    info.via = 'html';
     return info;
+  }
+
+  // 這些頁面綁 session 的購票流程狀態，狀態一壞就會被導回首頁，兩條路都會認出來
+  async function scanOnce() {
+    if (refreshBroken < 3) {
+      try {
+        const info = await scanViaRefresh();
+        refreshBroken = 0;
+        return info;
+      } catch (e) {
+        refreshBroken++;
+        logEvent('error', { where: 'refresh', msg: String(e && e.message || e) }, true);
+      }
+    }
+    return scanViaHtml();
   }
 
   // session 失效：停手並要使用者從節目頁重新進來，不自作主張亂跳
@@ -729,8 +801,9 @@
     const need = Math.max(1, toInt(S.count, 1));
     const targets = parseList(S.targets);
     const lines = [];
-    lines.push((S.enabled ? '● 監看中' : '○ 已關閉（手動）') + '｜第 ' + areaState.scans + ' 次｜' + new Date().toLocaleTimeString());
-    lines.push('模式：' + (AREA_FLAVOR === 'seatpick' ? '自行選位（此流程無電腦配位）' : '電腦配位') + '｜每次 ' + need + ' 張');
+    lines.push((S.enabled ? '● 監看中' : '○ 已關閉（手動）') + '｜第 ' + areaState.scans + ' 次｜' + new Date().toLocaleTimeString()
+      + (info && info.via ? '｜' + (info.via === 'refresh' ? '更新票數' : '整頁') : ''));
+    lines.push('模式：' + (AREA_FLAVOR === 'seatpick' ? '自行選位（此流程無電腦配位）' : '電腦配位') + '｜每次 ' + need + ' 張' + (S.pickMostSeats ? '｜同級選空位最多' : ''));
     if (info && info.action) lines.push('場次狀態：' + info.action);
     const rows = (info && info.rows) || [];
     const show = targets.length
@@ -1202,6 +1275,7 @@
     } else if (PAGE === 'area') {
       sessionStorage.setItem('kham_area_url', location.href);
       currentGmap();
+      applyHideSoldOut(); setTimeout(applyHideSoldOut, 1000);
       renderAreaPanel(null, S.enabled ? '啟動中…' : '主開關關閉，可按「立即執行」查一次');
       if (S.enabled) areaLoop();
     } else if (PAGE === 'qty') {

@@ -15,11 +15,13 @@ const DEFAULTS = {
   autoSubmitCaptcha: true,
   autoCheckout: false,
   pauseOthersOnWin: true,
+  hideSoldOut: true,
+  pickMostSeats: true,
 };
 
 const ids = ['enabled', 'startAt', 'refreshMs', 'perfKeyword', 'presaleCode', 'targets', 'count', 'ticketType',
   'acceptNonAdjacent', 'allowFewer', 'captchaLen', 'autoSubmitCaptcha', 'autoCheckout',
-  'pauseOthersOnWin'];
+  'pauseOthersOnWin', 'hideSoldOut', 'pickMostSeats'];
 const els = {};
 ids.concat(['masterBox', 'masterState', 'save', 'run', 'status',
   'wonBox', 'wonInfo', 'clearWon',
@@ -52,6 +54,8 @@ chrome.storage.sync.get(DEFAULTS).then((s) => {
   els.autoSubmitCaptcha.checked = !!s.autoSubmitCaptcha;
   els.autoCheckout.checked = !!s.autoCheckout;
   els.pauseOthersOnWin.checked = !!s.pauseOthersOnWin;
+  els.hideSoldOut.checked = !!s.hideSoldOut;
+  els.pickMostSeats.checked = !!s.pickMostSeats;
   renderMaster();
 });
 
@@ -101,6 +105,8 @@ function collect() {
     autoSubmitCaptcha: els.autoSubmitCaptcha.checked,
     autoCheckout: els.autoCheckout.checked,
     pauseOthersOnWin: els.pauseOthersOnWin.checked,
+    hideSoldOut: els.hideSoldOut.checked,
+    pickMostSeats: els.pickMostSeats.checked,
   };
 }
 
