@@ -276,6 +276,58 @@
     return false;
   }
 
+  // ---------------------------------------------------------------- 頁面快照
+  // 每一頁把 HTML 存下來，事後才有辦法對著真實結構優化（購物車／結帳／實名制頁一直沒登入看不到）。
+  // 個資在寫入前遮掉：身分證字號、Email、手機、password 欄位值。
+  const SNAP_KEY = 'snap_' + TAB_TOKEN;
+  const SNAP_MAX = 120;
+  let lastSnapSig = '';
+  function redact(html) {
+    return String(html || '')
+      .replace(/(<input[^>]*type=["']password["'][^>]*value=["'])[^"']*/gi, '$1***')
+      .replace(/\b[A-Z][12]\d{8}\b/g, '***ID***')                         // 身分證字號
+      .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '***@***')                     // Email
+      .replace(/\b09\d{2}[- ]?\d{3}[- ]?\d{3}\b/g, '09********')          // 手機
+      .replace(/(LOGIN_PWD=)[^&"'<]*/gi, '$1***');
+  }
+  async function snapshot(label, node) {
+    try {
+      const html = redact((node || document.documentElement).outerHTML);
+      // 內容沒變就不重複存（同一頁拍好幾張，很多會一樣）
+      const sig = html.length + ':' + html.slice(0, 200) + html.slice(-200);
+      if (!node && sig === lastSnapSig) return;
+      if (!node) lastSnapSig = sig;
+      const r = await chrome.storage.local.get({ [SNAP_KEY]: null });
+      const cur = (r && r[SNAP_KEY]) || { tab: TAB_TOKEN, items: [] };
+      cur.items = (cur.items || []).concat([{
+        t: Date.now(), page: PAGE, label, url: location.href, title: document.title, len: html.length, html,
+      }]).slice(-SNAP_MAX);
+      await chrome.storage.local.set({ [SNAP_KEY]: cur });
+      logEvent('snapshot', { label, len: html.length }, false);
+    } catch (e) { /* 存不下也不影響搶票 */ }
+  }
+
+  // 頁面上後來才冒出來的東西（選入場人視窗、錯誤對話框、任何 popout），出現時補拍一張
+  function watchModals() {
+    let timer = null, shots = 0;
+    const isModal = (el) => el && el.nodeType === 1 && el.matches &&
+      (el.matches('.ui-dialog, .popoutBG, .popout, [class*="popout"], [class*="modal"], [class*="dialog"], [id^="POPOUT"]')
+        || el.querySelector('.ui-dialog, .popoutBG, .popout, [class*="modal"], [id^="POPOUT"]'));
+    const obs = new MutationObserver((muts) => {
+      if (shots >= 12) { obs.disconnect(); return; }
+      let hit = false;
+      for (const m of muts) {
+        if (m.type === 'attributes' && isModal(m.target) && isShown(m.target)) { hit = true; break; }
+        for (const n of m.addedNodes) { if (isModal(n)) { hit = true; break; } }
+        if (hit) break;
+      }
+      if (!hit) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => { shots++; snapshot('modal'); }, 400);   // 等它畫完再拍
+    });
+    obs.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+  }
+
   // 網站在頁面載入時常跳一個「訊息視窗」（實名制提醒之類），每頁都要按一次 Ok 很煩。
   // 進頁面後監看 10 秒，這類提示自動關掉；帶錯誤字眼的（售完／帳號／驗證碼…）留著給人看。
   // 只認網站真正的錯誤句型；不能用「帳號」「密碼」這種字，實名制提醒裡就有「會員帳號」
@@ -298,7 +350,7 @@
         if (text && !seen.has(text) && !NOTICE_SKIP.test(text)) {
           seen.add(text);
           if (dismissDialog()) {
-            logEvent('notice_dismissed', { text: text.slice(0, 120) }, false);
+            logEvent('notice_dismissed', { text: text.slice(0, 300) }, false);
             toast('已關閉網站提示：' + text.slice(0, 40) + (text.length > 40 ? '…' : ''), 2500);
           }
         }
@@ -475,6 +527,7 @@
     const needTwo = !!(tr2 && tr2.offsetParent !== null);
     const code = String(S.presaleCode || '').trim();
     logEvent('presale_box', { title, label, needTwo, hasCode: !!code }, true);
+    snapshot('presale_box', document.querySelector('.popoutBG'));   // 燈箱長相事後要看
 
     if (!id1.__khamBound) {
       id1.__khamBound = true;
@@ -1129,6 +1182,14 @@
     loadCooldown();
     logEvent('nav', { url: location.href, title: document.title, flavor: PAGE === 'area' ? AREA_FLAVOR : '' }, true);
     autoDismissNotice();
+    // 每一頁都拍，包含購物車／結帳／實名制等沒特別處理的頁：
+    //   進頁面立刻一張（快頁不到 1.5 秒就跳走也留得住）、1.5 秒穩定後一張、
+    //   離開前一張（操作完的最終狀態，最重要）、燈箱或對話框彈出時再一張
+    snapshot('load');
+    setTimeout(() => snapshot('settled'), 1500);
+    window.addEventListener('pagehide', () => snapshot('leave'));
+    document.addEventListener('visibilitychange', () => { if (document.hidden) snapshot('hidden'); });
+    watchModals();
     // 分頁後開的情況：先確認別的分頁是不是已經搶到了
     try {
       chrome.storage.local.get({ won: null }).then((r) => { pauseForOtherTab(r && r.won); });

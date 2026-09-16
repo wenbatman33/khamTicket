@@ -23,7 +23,7 @@ const ids = ['enabled', 'startAt', 'refreshMs', 'perfKeyword', 'presaleCode', 't
 const els = {};
 ids.concat(['masterBox', 'masterState', 'save', 'run', 'status',
   'wonBox', 'wonInfo', 'clearWon',
-  'logStat', 'expJson', 'expStock', 'expReq', 'clearLog']).forEach((k) => {
+  'logStat', 'expJson', 'expStock', 'expReq', 'expSnap', 'clearLog']).forEach((k) => {
   els[k] = document.getElementById(k);
 });
 
@@ -231,9 +231,28 @@ els.expReq.addEventListener('click', async () => {
 
 els.clearLog.addEventListener('click', async () => {
   const all = await chrome.storage.local.get(null);
-  const keys = Object.keys(all).filter((k) => k.indexOf('log_') === 0);
+  const keys = Object.keys(all).filter((k) => k.indexOf('log_') === 0 || k.indexOf('snap_') === 0);
   if (!keys.length) return flash('⚠️ 目前沒有紀錄');
   await chrome.storage.local.remove(keys);
   renderLogStat();
   flash('🗑 已清除 ' + keys.length + ' 個分頁的紀錄');
+});
+
+
+// 頁面快照：所有分頁合併成一個可直接開的 HTML（每頁一段，附索引）
+els.expSnap.addEventListener('click', async () => {
+  const all = await chrome.storage.local.get(null);
+  const items = [];
+  Object.keys(all).filter((k) => k.indexOf('snap_') === 0).forEach((k) => {
+    ((all[k] || {}).items || []).forEach((it) => items.push(Object.assign({ tab: (all[k] || {}).tab || k }, it)));
+  });
+  if (!items.length) return flash('⚠️ 沒有頁面快照');
+  items.sort((a, b) => a.t - b.t);
+  const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const idx = items.map((it, i) => '<li><a href="#s' + i + '">' + esc(ts(it.t)) + ' [' + esc(it.page) + '/' + esc(it.label) + '] ' + esc(it.url) + '</a> (' + it.len + 'B)</li>').join('');
+  const body = items.map((it, i) => '<section id="s' + i + '"><h2>' + esc(ts(it.t)) + ' · ' + esc(it.page) + ' · ' + esc(it.label) + '</h2><div><code>' + esc(it.url) + '</code> · 分頁 ' + esc(it.tab) + '</div><textarea readonly style="width:100%;height:320px;font:11px/1.4 monospace">' + esc(it.html) + '</textarea></section>').join('');
+  const doc = '<!doctype html><meta charset="utf-8"><title>kham 頁面快照</title><style>body{font:14px system-ui;margin:20px}section{margin:24px 0;border-top:1px solid #ddd;padding-top:12px}</style>'
+    + '<h1>寬宏搶票 頁面快照（' + items.length + ' 頁，個資已遮蔽）</h1><ol>' + idx + '</ol>' + body;
+  download('kham_snapshots_' + stamp() + '.html', doc, 'text/html;charset=utf-8');
+  flash('📄 已匯出 ' + items.length + ' 頁');
 });
