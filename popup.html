@@ -3,56 +3,41 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  body {
-    width: 330px;
-    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
-    font-size: 14px; margin: 0; padding: 14px; background: #fafafa; color: #333;
-  }
+  body { width: 330px; font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+         font-size: 14px; margin: 0; padding: 14px; background: #fafafa; color: #333; }
   h1 { font-size: 16px; margin: 0 0 4px; }
-  .sub { font-size: 12px; color: #888; margin-bottom: 12px; }
+  .sub { font-size: 12px; color: #888; margin-bottom: 12px; line-height: 1.5; }
   .field { margin-bottom: 12px; }
   label { display: block; font-weight: 600; margin-bottom: 4px; }
   .hint { font-size: 12px; color: #888; margin-top: 3px; line-height: 1.5; }
-  input[type="text"], textarea {
-    width: 100%; box-sizing: border-box; padding: 6px 8px;
-    border: 1px solid #ccc; border-radius: 6px; font-size: 14px; font-family: inherit;
-  }
-  textarea { height: 110px; resize: vertical; line-height: 1.6; }
+  input[type="text"] { width: 100%; box-sizing: border-box; padding: 6px 8px;
+    border: 1px solid #ccc; border-radius: 6px; font-size: 14px; font-family: inherit; }
   .field.inline { display: flex; align-items: center; gap: 8px; }
   .field.inline label { margin: 0; white-space: nowrap; }
-  .field.inline input[type="number"] {
-    width: 70px; text-align: center; padding: 6px 4px;
-    border: 1px solid #ccc; border-radius: 6px; font-size: 14px; font-family: inherit;
-  }
+  .field.inline input[type="number"] { width: 70px; text-align: center; padding: 6px 4px;
+    border: 1px solid #ccc; border-radius: 6px; font-size: 14px; font-family: inherit; }
   .check { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .check input { width: 16px; height: 16px; margin: 0; }
   .check label { font-weight: 500; margin: 0; }
-  /* 主開關：搶票中要能一眼看到、立刻關掉 */
-  .master {
-    border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
-    border: 2px solid #ccc; background: #f0f0f0; transition: background .15s, border-color .15s;
-  }
+  .master { border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+    border: 2px solid #ccc; background: #f0f0f0; transition: background .15s, border-color .15s; }
   .master.on { border-color: #c8102e; background: #fdecef; }
   .master-row { display: flex; align-items: center; gap: 10px; }
   .master-row input { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; }
   .master-row label { font-size: 15px; font-weight: 700; margin: 0; }
   .master-state { font-size: 12px; color: #666; margin-top: 6px; line-height: 1.5; }
-  .section {
-    border: 1px solid #e6dde0; background: #fdf7f8; border-radius: 8px;
-    padding: 10px 10px 4px; margin-bottom: 12px;
-  }
-  .section-title { font-weight: 700; margin-bottom: 4px; }
-  .section-note { font-size: 12px; color: #755; line-height: 1.6; margin-bottom: 10px; }
+  .does { border: 1px solid #d7e3ea; background: #f2f9fc; border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 12px; font-size: 12px; line-height: 1.8; }
+  .does b { color: #1a6a8a; }
+  .section { border: 1px solid #e6dde0; background: #fdf7f8; border-radius: 8px;
+    padding: 10px 10px 4px; margin-bottom: 12px; }
+  .section-title { font-weight: 700; margin-bottom: 8px; }
   .adv { margin-bottom: 12px; }
   .adv summary { cursor: pointer; font-size: 13px; color: #c8102e; font-weight: 600; }
-  .warn {
-    font-size: 12px; line-height: 1.6; color: #7a4a00; background: #fff6e5;
-    border: 1px solid #ffd699; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px;
-  }
-  button {
-    width: 100%; padding: 9px; border: 0; border-radius: 6px;
-    font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 6px;
-  }
+  .warn { font-size: 12px; line-height: 1.6; color: #7a4a00; background: #fff6e5;
+    border: 1px solid #ffd699; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; }
+  button { width: 100%; padding: 9px; border: 0; border-radius: 6px;
+    font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 6px; }
   #save { background: #c8102e; color: #fff; }
   .mini { flex:1; padding:7px 4px; font-size:12px; background:#c8102e; color:#fff; margin-bottom:0; }
   #run { background: #eee; color: #333; }
@@ -60,162 +45,65 @@
 </style>
 </head>
 <body>
-  <h1>🎫 寬宏搶票輔助</h1>
-  <div class="sub">kham.com.tw ｜ 電腦配位模式</div>
+  <h1>🎫 寬宏填寫輔助</h1>
+  <div class="sub">kham.com.tw ｜ 看到元素就幫你填／幫你點，其餘都由你自己決定</div>
+
+  <div class="does">
+    <b>它只做四件事</b><br>
+    1. 訊息視窗 → 自動按「Ok」（錯誤訊息會留給你看）<br>
+    2. 優先購序號 → 自動填入並送出<br>
+    3. 張數欄位 → 自動填入<br>
+    4. 驗證碼 → 放大並把游標放進去（<b>絕不碰圖、不代填</b>）<br>
+    <span style="color:#888">場次、票區、換頁、結帳：<b>全部由你自己點</b>。</span>
+  </div>
 
   <div class="master" id="masterBox">
     <div class="master-row">
       <input type="checkbox" id="enabled">
-      <label for="enabled">自動搶票</label>
+      <label for="enabled">自動送出</label>
     </div>
     <div class="master-state" id="masterState"></div>
-    <div class="hint" style="margin-top:6px">網頁上的面板標題列也有同一顆開關，搶票當下可以就地開關，不必回來這裡。</div>
-  </div>
-
-  <div class="field">
-    <label for="startAt">開搶時間</label>
-    <input type="text" id="startAt" placeholder="10:00:00（留空 = 進頁面就開始）">
-    <div class="hint">可精確到秒。以本機時鐘為準，請先確認系統時間為自動同步。</div>
-  </div>
-
-  <div class="field inline">
-    <label for="refreshMs">重試間隔</label>
-    <input type="number" id="refreshMs" min="50" step="50">
-    <span class="hint" style="margin:0">毫秒，預設 800</span>
-  </div>
-
-  <div class="field">
-    <label for="presaleCode">優先購序號／認證碼</label>
-    <input type="text" id="presaleCode" placeholder="預購序號、中信卡號前幾碼…（一般販售留空）">
-    <div class="hint">不管在哪一頁、是燈箱還是整頁，<b>只要畫面上出現序號欄位就自動填入</b>，照原樣填、<b>不做任何裁切</b>（序號一經使用即失效，請留意全半形與大小寫）。主開關開著才會自動按送出。若還有第二個欄位（密碼類），會停下來讓你自己填。<b>驗證碼欄位永遠不會被碰到。</b></div>
-    <div class="check" style="margin-top:8px">
-      <input type="checkbox" id="autoSubmitPresale">
-      <label for="autoSubmitPresale">填好就自動按「送出」</label>
-    </div>
-    <div class="hint" style="margin:-4px 0 0 24px">跟主開關無關，手動模式也會送。連續送出 3 次沒過就停手，交還給你（序號是一次性的，不能無限試）。</div>
-  </div>
-
-  <div class="field">
-    <label for="perfKeyword">場次關鍵字（通常留空）</label>
-    <input type="text" id="perfKeyword" placeholder="留空 = 第一個可訂購的場次">
-    <div class="hint">一個商品頁多場次時才用（填 <code>2/27</code> 這種）。輪椅場預設排除，除非你填「輪椅」。</div>
-  </div>
-
-  <div class="section" style="border-color:#c8102e;background:#fff5f6">
-    <div class="section-title">⚡ 直達票區頁（最快的路）</div>
-    <div class="section-note">開賣瞬間<b>跳過節目頁與場次頁</b>，時間一到直接開票區頁。
-    票區頁網址只要<b>已登入</b>就能直接開。由上往下試，進去沒票就換下一個，全部試完再從頭一輪（等回流票）。</div>
-    <div class="field">
-      <label for="directUrls">直達目標（一行一個，依優先序）</label>
-      <textarea id="directUrls" style="height:92px" placeholder="P1FDECMD,P1EMCIC6&#10;P1FDSO0X,P1EMCIC6&#10;或直接貼完整網址"></textarea>
-      <div class="hint">可填 <code>PERFORMANCE_ID,PRODUCT_ID</code>、只填 <code>PERFORMANCE_ID</code>，或整條網址。
-      <b>網址只有在還買得到時才看得到</b>（完售後網站會從頁面移除），所以工具每次經過場次頁都會自動記下來。</div>
-    </div>
   </div>
 
   <div class="section">
-    <div class="section-title">搶什麼票</div>
-    <div class="section-note">由上往下試，搶到就停。比對不分大小寫、忽略空白，可只填一部分（填「VIP」會對到所有含 VIP 的票區）。<b>填純數字＝當票價比</b>（填 <code>9430</code> 只會對到 9430 元，不會被 943 或 94300 對到）。</div>
+    <div class="section-title">優先購序號</div>
     <div class="field">
-      <label for="priceTargets">票價優先順序（一行一個）</label>
-      <textarea id="priceTargets" style="height:86px" placeholder="9430&#10;8880&#10;6980"></textarea>
-      <div class="hint">BIGBANG 這種「同一場次依票價拆成十幾列」的活動，<b>要買哪個價位是在場次頁決定的</b>，這裡填票價就好。
-      設了卻一個都對不到時<b>會停手不亂點</b>，不會買到你沒要的價位。留空＝不挑價位。</div>
+      <input type="text" id="presaleCode" placeholder="預購序號（一般販售留空）">
+      <div class="hint">不管在哪一頁、燈箱還是整頁，<b>只要出現序號欄位就自動填入</b>，照原樣填、<b>不裁切</b>。
+      欄位被清空又出現會再填一次。<b>驗證碼欄位永遠不會被碰到。</b></div>
     </div>
     <div class="check">
-      <input type="checkbox" id="crossPrice">
-      <label for="crossPrice">背景監控其他票價，有票就跳過去</label>
+      <input type="checkbox" id="autoSubmitPresale">
+      <label for="autoSubmitPresale">填好就自動按「送出」</label>
     </div>
-    <div class="hint" style="margin:-4px 0 10px 24px">站在某個價位的票區頁時，同時輪詢其他價位的場次；面板會列出每個價位還有幾區有票。只會往「更想要的價位」跳。</div>
-    <div class="hint" style="margin:0 0 10px">進到票區頁後：<b>哪一區有票就點哪一區</b>（同價位多區時取空位最多的）。不再需要填票區名稱。</div>
+    <div class="hint" style="margin:-4px 0 8px 24px">連續送出 3 次沒過就停手交還給你（序號是一次性的，不能無限試）。</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">張數</div>
     <div class="field inline">
-      <label for="count">每次買幾張</label>
+      <label for="count">每次填幾張</label>
       <input type="number" id="count" min="1" max="8">
     </div>
     <div class="check">
       <input type="checkbox" id="allowFewer">
-      <label for="allowFewer">剩餘不足時買剩下的（預設不足就換區）</label>
+      <label for="allowFewer">剩餘不足時改填剩下的</label>
     </div>
+    <div class="check">
+      <input type="checkbox" id="acceptNonAdjacent">
+      <label for="acceptNonAdjacent">自動勾「接受不連位座位」</label>
+    </div>
+    <div class="hint" style="margin:0 0 8px">站席頁的票區下拉<b>由你自己選</b>，選好之後我才幫你填張數。</div>
   </div>
 
-  <div class="check">
-    <input type="checkbox" id="acceptNonAdjacent">
-    <label for="acceptNonAdjacent">自動勾選「接受不連位座位」</label>
-  </div>
   <div class="check">
     <input type="checkbox" id="autoSubmitCaptcha">
-    <label for="autoSubmitCaptcha">驗證碼輸滿自動送出</label>
+    <label for="autoSubmitCaptcha">驗證碼輸滿自動按「加入購物車」</label>
   </div>
-  <div class="check">
-    <input type="checkbox" id="pickMostSeats">
-    <label for="pickMostSeats">同一優先順序對到多區時，選空位最多的</label>
-  </div>
-  <div class="hint" style="margin:-4px 0 8px 24px">填「VIP2」對到 VIP2 A～H 時挑餘票最多那區；關掉則照畫面順序取第一個。</div>
-  <div class="check">
-    <input type="checkbox" id="hideSoldOut">
-    <label for="hideSoldOut">票區頁自動勾「僅顯示未完售區」</label>
-  </div>
-  <div class="check">
-    <input type="checkbox" id="pauseOthersOnWin">
-    <label for="pauseOthersOnWin">有分頁搶到後，其他分頁先停手</label>
-  </div>
-  <div class="hint" style="margin:-4px 0 12px 24px">
-    開兩個分頁搶不同場次時用。驗證碼一次只能打一個，先把搶到的那邊處理完。
-  </div>
-
-  <div id="wonBox" style="display:none">
-    <div class="warn" style="background:#e8f5e9;border-color:#a5d6a7;color:#1b5e20">
-      <b>🎫 已有分頁搶到</b><span id="wonInfo"></span><br>
-      其他分頁目前暫停中。
-    </div>
-    <button id="clearWon" style="background:#2e7d32;color:#fff">▶ 解除暫停（其他分頁繼續搶）</button>
-  </div>
-
-  <div class="warn">
-    <b>驗證碼要自己打</b>：本工具不辨識驗證碼、也不代填帳號密碼。<br>
-    請<b>先登入會員</b>再開搶，張數頁會自動放大驗證碼並聚焦輸入框。<br>
-    <b>開賣前請停在節目頁</b>（網址 <code>UTK0201_.aspx?PRODUCT_ID=…</code>），
-    工具會等到開賣時間才開始按「立即購票」。
-  </div>
-
-  <details class="adv">
-    <summary>進階設定</summary>
-    <div style="margin-top:10px">
-      <div class="field">
-        <label for="ticketType">票種優先順序（逗號分隔）</label>
-        <input type="text" id="ticketType" placeholder="留空 = 用該區第一種票">
-        <div class="hint">同一票區有多種票價時（全票／優待票…）要哪個。完全相符優先於包含。</div>
-      </div>
-      <div class="field inline">
-        <label for="captchaLen">驗證碼位數</label>
-        <input type="number" id="captchaLen" min="1" max="10">
-        <span class="hint" style="margin:0">輸滿即送出，預設 4</span>
-      </div>
-      <div class="check">
-        <input type="checkbox" id="autoCheckout">
-        <label for="autoCheckout">加入購物車後自動按「結帳」</label>
-      </div>
-      <div class="hint">結帳流程請自行確認金額與場次後再付款。</div>
-    </div>
-  </details>
-
-  <div class="section" style="border-color:#dde6ea;background:#f4fafc">
-    <div class="section-title">搶票紀錄</div>
-    <div class="section-note" id="logStat">讀取中…</div>
-    <div style="display:flex;gap:6px;margin-bottom:6px">
-      <button id="expJson" class="mini">📥 完整 JSON</button>
-      <button id="expStock" class="mini">📊 票源 CSV</button>
-      <button id="expReq" class="mini">📋 請求 CSV</button>
-    </div>
-    <div style="display:flex;gap:6px;margin-bottom:6px">
-      <button id="expSnap" class="mini" style="background:#555">📄 頁面快照 (HTML)</button>
-      <button id="clearLog" class="mini" style="background:#eee;color:#666">🗑 清除紀錄</button>
-    </div>
-    <div class="hint">紀錄含每輪全場各票區餘位、每一筆購票請求的送出參數與伺服器回應。帳號與密碼欄位在寫入前已遮蔽為 <code>***</code>；頁面快照中的身分證字號、Email、手機也已遮蔽。</div>
-  </div>
+  <div class="hint" style="margin:-4px 0 12px 24px">需要上面的「自動送出」也開著。位數以頁面的 maxlength 為準。</div>
 
   <button id="save">💾 儲存設定</button>
-  <button id="run">▶ 在目前分頁立即執行</button>
+  <button id="run">▶ 在目前分頁立即填一次</button>
   <div id="status"></div>
 
   <script src="popup.js"></script>

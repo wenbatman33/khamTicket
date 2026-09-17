@@ -1,0 +1,42 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>不可自作主張：不點訂購、不換頁</title></head><body>
+<!-- 場次列表 + 票區表 + 訊息視窗 + 張數欄位 全部同時存在。
+     工具只能做四件事：關訊息視窗、填序號、填張數、放大驗證碼。
+     絕對不可以點「立即訂購」、不可以點票區、不可以換頁。 -->
+<table id="perfTable">
+ <tr><td>【8880元票價】BIGBANG</td><td><s>8880</s></td>
+     <td><a href='javascript:;'><button class='red' onclick='doLink("UTK0201_000.aspx?PERFORMANCE_ID=A2",323);return false;'>立即訂購</button></a></td></tr>
+</table>
+<div id="AREA_DIV">
+  <table id="salesTable">
+    <tr class="status_tr" id="1003" rel="a25" onclick="window.__result.areaClicked=true"><td>■</td><td>平面B5區</td><td>8,880</td><td>12</td></tr>
+  </table>
+</div>
+<div class="ui-dialog" id="d1"><div class="ui-dialog-titlebar">訊息視窗</div>
+  <div id="dialog-message">本節目採「個人實名制入場」，請於購票前至【會員專區】再次確認資料正確無誤。</div>
+  <div class="ui-dialog-buttonpane"><button onclick="window.__result.ok=true;document.getElementById('d1').style.display='none'">Ok</button></div></div>
+<input type="hidden" id="QUANTITY_LIMIT" value="4" />
+<input type="hidden" ID="T1" KEY="TYPE_ID" Value="T1" />
+<input class="numbox" type="number" id="AMOUNT" KEY='T1' value="0" />
+<input name="CHK" type="text" maxlength="4" id="CHK" />
+<script>
+ window.__result = {};
+ function doLink(u){ window.__result.link = u; }
+ const store = { enabled:true, autoSubmitCaptcha:true, count:2, presaleCode:'' };
+ window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
+   local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };
+ window.fetch = () => Promise.reject(new Error('offline test'));
+</script>
+<script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+setTimeout(() => {
+  const r = window.__result;
+  document.getElementById('RESULT').textContent =
+    'NOTICE_OK=' + (r.ok ? 'PASS' : 'FAIL') +
+    ' | QTY_FILLED=' + (document.querySelector("input[KEY='T1']").value === '2' ? 'PASS' : 'FAIL') +
+    ' | NO_ORDER_CLICK=' + (r.link ? 'FAIL(' + r.link + ')' : 'PASS') +
+    ' | NO_AREA_CLICK=' + (r.areaClicked ? 'FAIL' : 'PASS');
+}, 2500);
+</script>
+</body></html>

@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>訊息視窗自動按 Ok</title>
+<style>.ui-dialog{border:1px solid #ccc;width:420px}.ui-dialog-titlebar{background:#eee;padding:8px}
+.ui-dialog-buttonpane{text-align:right;padding:8px}</style></head><body>
+<!-- 1. 實名制提醒：要自動按掉 -->
+<div class="ui-dialog" id="d1">
+  <div class="ui-dialog-titlebar">訊息視窗<button class="ui-dialog-titlebar-close" onclick="window.__result.closeX=true">✖</button></div>
+  <div id="dialog-message">本節目採「個人實名制入場」，請於購票前至【會員專區】再次確認會員本人及實名制名單中入場人資料正確無誤並詳閱相關購退票規定、各項說明與注意事項，以免影響自身權益。
+  ◆本國籍人士：限以國民身分證字號作為會員帳號。◆非本國籍人士：以護照號碼作為會員帳號。</div>
+  <div class="ui-dialog-buttonpane"><button onclick="window.__result.ok1=true;document.getElementById('d1').style.display='none'">Ok</button></div>
+</div>
+<!-- 2. 錯誤訊息：不可以幫忙關掉，要留給人看 -->
+<div class="ui-dialog" id="d2">
+  <div class="ui-dialog-titlebar">訊息視窗</div>
+  <div id="dialog-message2">驗證碼錯誤，請重新輸入。</div>
+  <div class="ui-dialog-buttonpane"><button onclick="window.__result.ok2=true">Ok</button></div>
+</div>
+<script>
+ window.__result = {};
+ const store = { enabled:false, presaleCode:'', directUrls:'', priceTargets:'', targets:'', crossPrice:false, count:2 };
+ window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
+   local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };
+ window.fetch = () => Promise.reject(new Error('offline test'));
+</script>
+<script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+setTimeout(() => {
+  const r = window.__result;
+  document.getElementById('RESULT').textContent =
+    'NOTICE_OK_CLICKED=' + (r.ok1 ? 'PASS' : 'FAIL') +
+    ' | ERROR_DIALOG_KEPT=' + (r.ok2 ? 'FAIL（不該關錯誤訊息）' : 'PASS');
+}, 2500);
+</script>
+</body></html>

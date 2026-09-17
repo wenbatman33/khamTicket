@@ -1,12 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "寬宏售票表單填寫輔助",
-  "version": "1.10.0",
-  "description": "協助在寬宏售票（kham.com.tw）填寫票區／張數／驗證碼欄位並顯示狀態；與該網站無隸屬關係。",
+  "name": "寬宏售票填寫輔助",
+  "version": "2.0.0",
+  "description": "在寬宏售票（kham.com.tw）看到欄位就幫你填：優先購序號、張數；並自動關掉訊息視窗、放大驗證碼。不挑場次、不挑票區、不自動換頁。與該網站無隸屬關係。",
   "permissions": [
     "storage",
-    "notifications",
-    "unlimitedStorage"
+    "notifications"
   ],
   "host_permissions": [
     "https://kham.com.tw/*"

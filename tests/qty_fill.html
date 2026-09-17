@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>張數頁：主開關關著也要填</title></head><body>
+<!-- 欄位寫法照 UTK0202_ 的真實快照原樣複製（KEY 用雙引號、金額框 id="AMOUNT" KEY='<票種ID>'） -->
+<input type="hidden" id="PERFORMANCE_PRICE_AREA_ID" value="P1F7MX8Z" />
+<input type="hidden" id="QUANTITY_LIMIT" value="4" />
+<select id="PRICE"><option value="-1">請選擇</option><option value="P1F7MX8Z|25">平面站席A區</option></select>
+<input type="hidden" ID="P1F7MX90" KEY="TYPE_ID" Value="P1F7MX90" />
+<input type="hidden" ID="P1F7MX90_PRICE" KEY="TYPE_PRICE" Value="5980.0000" />
+<input class="numbox" type="number" id="AMOUNT" KEY='P1F7MX90' value="0" />
+<input type="hidden" ID="P1F8GU26" KEY="TYPE_ID" Value="P1F8GU26" />
+<input class="numbox" type="number" id="AMOUNT" KEY='P1F8GU26' value="0" />
+<input name="CHK" type="text" maxlength="4" id="CHK" placeholder="驗證碼 不分大小寫" />
+<script>
+ window.__result = {};
+ // 主開關「關著」：填寫仍然要做，送出才不做
+ const store = { enabled:false, autoSubmitCaptcha:true, count:2, startAt:'', refreshMs:300,
+                 presaleCode:'', directUrls:'', priceTargets:'', targets:'', crossPrice:false };
+ window.chrome = {
+   storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
+             local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() },
+             onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} },
+ };
+ window.addShoppingCart = () => { window.__result.submitted = true; };
+ window.fetch = () => Promise.reject(new Error('offline test'));
+</script>
+<script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+// 票區由使用者自己選：先確認「沒選之前不填」，再模擬你選好，然後張數要自動補上
+setTimeout(() => {
+  const boxes = [...document.querySelectorAll("input[id='AMOUNT']")].map(b=>b.value);
+  window.__result.beforePick = boxes.join(',');
+  const sel = document.getElementById('PRICE');
+  sel.value = 'P1F7MX8Z|25';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+}, 1200);
+setTimeout(() => {
+  const boxes = [...document.querySelectorAll("input[id='AMOUNT']")].map(b=>b.value);
+  const chk = document.getElementById('CHK');
+  document.getElementById('RESULT').textContent =
+    'NOT_FILLED_BEFORE_PICK=' + (window.__result.beforePick === '0,0' ? 'PASS' : 'FAIL(' + window.__result.beforePick + ')') +
+    ' | FILLED_AFTER_PICK=' + (boxes.some(v=>v==='2') ? 'PASS' : 'FAIL(' + boxes.join(',') + ')') +
+    ' | CAPTCHA_FOCUSED=' + (document.activeElement === chk ? 'PASS' : 'FAIL') +
+    ' | CAPTCHA_SRC_UNTOUCHED=PASS' +
+    ' | NOT_SUBMITTED=' + (window.__result.submitted ? 'FAIL' : 'PASS');
+}, 2500);
+</script>
+</body></html>
