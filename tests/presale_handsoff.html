@@ -1,0 +1,38 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>使用者接手後工具不再碰欄位</title></head><body>
+<div class="popoutBG"><div class="popout">
+  <div>中國信託卡友　購票時請先輸入卡號前6碼以做驗證。</div>
+  <div>＊卡號：<input type="text" id="CARD6" maxlength="6"></div>
+  <button onclick="window.__result.sent=(window.__result.sent||0)+1">送　出</button>
+</div></div>
+<script>
+ window.__result = {};
+ // 故意設一個「錯的」值，模擬設定裡留著舊序號
+ const store = { enabled:true, presaleCode:'WRONG1', autoSubmitPresale:true, count:2 };
+ window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
+   local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };
+ window.fetch = () => Promise.reject(new Error('offline test'));
+</script>
+<script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+const el = document.getElementById('CARD6');
+// 1 秒後：使用者發現值是錯的，按 Backspace 清空，然後自己打 409922
+setTimeout(() => {
+  window.__result.toolFilled = el.value;
+  window.__result.sentByTool = window.__result.sent || 0;
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+  el.value = '';
+}, 1000);
+setTimeout(() => { window.__result.afterClear = el.value; }, 1600);   // 這段時間工具不可以填回去
+setTimeout(() => { el.value = '409922'; el.dispatchEvent(new Event('input', { bubbles: true })); }, 1800);
+setTimeout(() => {
+  const r = window.__result;
+  document.getElementById('RESULT').textContent =
+    'TOOL_FILLED_FIRST=' + (r.toolFilled === 'WRONG1' ? 'PASS' : 'FAIL') +
+    ' | NO_REFILL_AFTER_USER_CLEARS=' + (r.afterClear === '' ? 'PASS' : 'FAIL("' + r.afterClear + '")') +
+    ' | USER_VALUE_KEPT=' + (el.value === '409922' ? 'PASS' : 'FAIL("' + el.value + '")') +
+    ' | NO_EXTRA_SUBMIT=' + ((r.sent || 0) === r.sentByTool ? 'PASS' : 'FAIL');
+}, 2800);
+</script>
+</body></html>

@@ -17,7 +17,7 @@
   if (window.__khamHelperLoaded) return;
   window.__khamHelperLoaded = true;
 
-  const VER = '2.2.0';
+  const VER = '2.3.0';
 
   // ---------------------------------------------------------------- 設定
   // 這個工具只做一件事：**看到元素就幫你填／幫你點**。
@@ -561,6 +561,7 @@
     showPanel(['● 優先購序號', title, '已填入 ' + code.length + ' 碼：' + code, reason]);
     toast('已填入優先購序號：' + code + '\n' + reason);
     if (second) { try { second.focus(); } catch (e) {} return; }
+    if (el.__khamUserTyped) return;                 // 你接手了，送出也交給你
     if (S.autoSubmitPresale && presaleState.tries < 3) presaleSubmit('序號已填');
     else try { el.focus(); } catch (e) {}
   }
@@ -574,6 +575,19 @@
       try {
         const el = findPresaleField();
         if (!el) return;
+        // 你一碰鍵盤（keydown／paste 是工具永遠不會自己發的事件），這個欄位就交給你，
+        // 工具從此不再填、不再送。否則你清掉錯的值想自己打，它 0.2 秒後又填回去 —— 那是在擋你。
+        if (!el.__khamHandsOffBound) {
+          el.__khamHandsOffBound = true;
+          const handsOff = () => {
+            if (el.__khamUserTyped) return;
+            el.__khamUserTyped = true;
+            showPanel(['● 優先購序號', '你自己在輸入了，這個欄位我不再碰。', '打完請自己按送出（或按 Enter）。']);
+          };
+          el.addEventListener('keydown', handsOff);
+          el.addEventListener('paste', handsOff);
+        }
+        if (el.__khamUserTyped) return;
         // 已經有值（我們填的、或你自己打的）→ 不動它
         if (String(el.value || '').trim()) return;
         if (Date.now() - (el.__khamLastFill || 0) < 800) return;   // 網站清空後的重填節流
