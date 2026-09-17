@@ -16,6 +16,7 @@ run() {
 run notice_ok        # 訊息視窗自動按 Ok；錯誤訊息不可以幫忙關掉
 run presale_box      # 序號欄位出現 → 填入 → 按送出
 run presale_wrapper  # 送出鈕被空殼 div 包住時，要點到裡面真正可點的那一顆
+run presale_card     # 中信卡友「卡號前6碼」要填；結帳頁的信用卡號絕不能碰
 run presale_reopen   # 燈箱關掉再開（同一個 input 被清空）→ 要再填一次並再送出
 run qty_fill         # 主開關關著也要填張數，但不可以送出
 run captcha_ime      # 忘了切輸入法：全形轉半形、中文濾掉、正常英數不動

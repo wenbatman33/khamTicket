@@ -23,13 +23,33 @@
  window.fetch = () => Promise.reject(new Error('offline test'));
 </script>
 <script src="../content.js"></script>
+<!-- 3. 需要你決定的確認框：絕對不可以代按 -->
+<div class="ui-dialog" id="d3">
+  <div class="ui-dialog-titlebar">訊息視窗</div>
+  <div id="dialog-message3">確定要送出訂單嗎？送出後將無法修改。</div>
+  <div class="ui-dialog-buttonpane">
+    <button onclick="window.__result.order=true">確定</button>
+    <button onclick="window.__result.cancel=true">取消</button>
+  </div>
+</div>
+<!-- 4. 有取消可選的視窗：也不可以代按 -->
+<div class="ui-dialog" id="d4">
+  <div class="ui-dialog-titlebar">訊息視窗</div>
+  <div id="dialog-message4">您即將離開此頁面，未完成的資料不會保留。</div>
+  <div class="ui-dialog-buttonpane">
+    <button onclick="window.__result.leave=true">確定</button>
+    <button onclick="window.__result.stay=true">取消</button>
+  </div>
+</div>
 <div id="RESULT">running…</div>
 <script>
 setTimeout(() => {
   const r = window.__result;
   document.getElementById('RESULT').textContent =
     'NOTICE_OK_CLICKED=' + (r.ok1 ? 'PASS' : 'FAIL') +
-    ' | ERROR_DIALOG_KEPT=' + (r.ok2 ? 'FAIL（不該關錯誤訊息）' : 'PASS');
+    ' | ERROR_DIALOG_KEPT=' + (r.ok2 ? 'FAIL（不該關錯誤訊息）' : 'PASS') +
+    ' | ORDER_CONFIRM_KEPT=' + (r.order ? 'FAIL（替使用者下單了）' : 'PASS') +
+    ' | CHOICE_DIALOG_KEPT=' + (r.leave || r.stay ? 'FAIL（替使用者做了選擇）' : 'PASS');
 }, 2500);
 </script>
 </body></html>

@@ -1,0 +1,31 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>中信卡友：卡號前6碼（真實文案，無「優先購」字樣）</title></head><body>
+<!-- 1. 優先購畫面裡的「卡號前6碼」→ 這是認證欄位，要填 -->
+<div class="popoutBG"><div class="popout">
+  <div>中國信託卡友　購票時請先輸入卡號前6碼以做驗證。</div>
+  <div>＊卡號：<input type="text" id="CARD6" maxlength="6"></div>
+  <button onclick="window.__result.sent=true">送　出</button>
+</div></div>
+<!-- 2. 結帳頁的真正信用卡號（沒有優先購字樣、長度 16）→ 絕不能碰 -->
+<div class="checkout"><div>付款資訊</div>
+  <div>信用卡卡號：<input type="text" id="PAYCARD" maxlength="16"></div>
+  <div>持卡人卡號（無長度限制）：<input type="text" id="PAYCARD2"></div></div>
+<script>
+ window.__result = {};
+ const store = { enabled:true, presaleCode:'123456', autoSubmitPresale:true, count:2 };
+ window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
+   local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };
+ window.fetch = () => Promise.reject(new Error('offline test'));
+</script>
+<script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+setTimeout(() => {
+  document.getElementById('RESULT').textContent =
+    'CARD6_FILLED=' + (document.getElementById('CARD6').value === '123456' ? 'PASS' : 'FAIL("' + document.getElementById('CARD6').value + '")') +
+    ' | SUBMITTED=' + (window.__result.sent ? 'PASS' : 'FAIL') +
+    ' | PAYMENT_CARD_UNTOUCHED=' + (document.getElementById('PAYCARD').value === '' ? 'PASS' : 'FAIL') +
+    ' | PAYMENT_NO_MAXLEN_UNTOUCHED=' + (document.getElementById('PAYCARD2').value === '' ? 'PASS' : 'FAIL');
+}, 2500);
+</script>
+</body></html>

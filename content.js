@@ -17,7 +17,7 @@
   if (window.__khamHelperLoaded) return;
   window.__khamHelperLoaded = true;
 
-  const VER = '2.1.0';
+  const VER = '2.2.0';
 
   // ---------------------------------------------------------------- 設定
   // 這個工具只做一件事：**看到元素就幫你填／幫你點**。
@@ -201,6 +201,10 @@
   // 帶錯誤字眼的留著給人看，不要幫忙關掉。
   // 註：不能用「帳號」「密碼」當關鍵字 —— 實名制提醒裡就有「會員帳號」。
   const NOTICE_SKIP = /必須填寫|請輸入|認證|錯誤|失敗|售完|額滿|逾時|驗證碼|尚未啟售|不足|超過|無法|已無|重新/;
+  // 需要你做決定的視窗，一律不代按（訂單、付款、刪除、離開…）
+  const DECISION_SKIP = /是否|確定要|確認要|要不要|送出訂單|下單|付款|結帳|刪除|移除|取消訂單|離開|放棄/;
+  // 視窗裡有「取消」之類的選項 = 網站在問你，不是單純提醒
+  const CANCEL_TXT = /^(取消|否|放棄|返回|上一步|cancel|no)$/i;
   const isShown = (el) => {
     if (!el) return false;
     const cs = getComputedStyle(el);
@@ -220,6 +224,11 @@
       if (presale && dlg.contains(presale)) continue;        // 優先購畫面不能關
       const text = elText(dlg, 400);
       if (!text || text.length < 6 || NOTICE_SKIP.test(text)) continue;
+      if (DECISION_SKIP.test(text)) continue;                 // 要你決定的事，不代按
+      // 有「取消」可選 → 這是選擇題，不是通知；替你按等於替你決定
+      const hasCancel = [...dlg.querySelectorAll('button,input[type=button],input[type=submit],a')]
+        .some((b) => visibleEl(b) && CANCEL_TXT.test(norm(b.value || elText(b, 12))));
+      if (hasCancel) continue;
       const btn = okButton(dlg);
       if (btn) return { dlg, btn, text };
     }
@@ -280,9 +289,16 @@
   // 欄位本身的線索（弱訊號）
   const CODE_RE = /presale\s*code|序號|認證碼|認証碼|兌換碼|優惠碼/i;
   // 附近有這些字才算真的在優先購畫面（強訊號）
-  const PRESALE_SCOPE_RE = /優先購|presale|會員認證|membership|vip\s*sell/i;
-  // 對到這些一律不填（帳密、個資、付款欄位）
-  const NEVER_RE = /驗證碼|驗証碼|captcha|帳號|身分證|統一編號|密碼|password|e-?mail|信箱|手機|電話|生日|姓名|地址|信用卡|卡號|card\s*number|cvv|有效期/i;
+  // 「中國信託卡友 購票時請先輸入卡號前6碼以做驗證」這種畫面裡沒有「優先購」三個字，
+  // 所以卡友／做驗證／購票驗證這類字樣也要算數，否則會拒填。
+  const PRESALE_SCOPE_RE = /優先購|presale|會員認證|membership|vip\s*sell|卡友|以做驗證|購票驗證|身分驗證/i;
+  // 一律不填（帳密、個資、驗證碼、付款安全性欄位）
+  const NEVER_RE = /驗證碼|驗証碼|captcha|帳號|身分證|統一編號|密碼|password|e-?mail|信箱|手機|電話|生日|姓名|地址|cvv|安全碼|有效期|到期/i;
+  // 卡號類要分兩種情況：
+  //   優先購畫面裡的「卡號前 6 碼」是合法的認證欄位（中國信託卡友場次就是這樣驗證）→ 要填
+  //   結帳頁的信用卡號是真的卡號 → 絕不能碰
+  // 所以：只有在優先購／認證畫面裡，而且欄位長度像「前幾碼」時才填。
+  const CARD_RE = /信用卡|卡號|card\s*number|卡片/i;
 
   const presaleState = { filled: false, submitted: false, watching: false, timer: null, tries: 0 };
 
@@ -370,11 +386,23 @@
     for (const el of textInputs()) {
       if (isCaptchaField(el)) continue;               // 硬性排除，第一道
       const ctx = fieldContext(el);
-      if (NEVER_RE.test(fieldOwn(el))) continue;      // 帳密／個資／付款欄位（只看欄位自己，不被容器文字誤殺）
+      const own = fieldOwn(el);
+      if (NEVER_RE.test(own)) continue;               // 帳密／個資（只看欄位自己，不被容器文字誤殺）
+      const scope = presaleScope(el);
+      if (CARD_RE.test(ctx)) {
+        if (!scope) continue;                          // 不在認證畫面的卡號欄位：絕不碰
+        const ml = parseInt(el.getAttribute('maxlength'), 10);
+        // 認證用的是「卡號前幾碼」，長度很短；付款用的是完整卡號。
+        // 兩個條件二選一才填：欄位長度 <= 8，或畫面明寫「前 N 碼」。
+        const short = Number.isFinite(ml) && ml <= 8;
+        const prefix = /前\s*[0-9０-９一二三四五六七八九十]+\s*碼/.test(ctx);
+        if (!short && !prefix) continue;
+        if (Number.isFinite(ml) && ml >= 13) continue; // 長度像完整卡號 → 付款欄位，不碰
+      }
       let score = 0;
       if (el.id === 'ID1') score += 5;                // 已知的燈箱欄位
-      if (presaleScope(el)) score += 3;               // 附近寫著「優先購 / Presale」
-      if (CODE_RE.test(ctx)) score += 2;              // 欄位自己叫序號／Presale Code
+      if (scope) score += 3;                          // 附近寫著「優先購 / Presale」
+      if (CODE_RE.test(ctx) || CARD_RE.test(ctx)) score += 2;   // 欄位叫序號／Presale Code／卡號前幾碼
       if (score > bestScore) { best = el; bestScore = score; }
     }
     return bestScore >= 3 ? best : null;
