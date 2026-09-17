@@ -7,7 +7,7 @@
 <script>
  window.__result = {};
  // 故意設一個「錯的」值，模擬設定裡留著舊序號
- const store = { enabled:true, presaleCode:'WRONG1', autoSubmitPresale:true, count:2 };
+ const store = { enabled:true, presaleCode:'111111', autoSubmitPresale:true, count:2 };
  window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
    local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
    runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };
@@ -29,7 +29,7 @@ setTimeout(() => { el.value = '409922'; el.dispatchEvent(new Event('input', { bu
 setTimeout(() => {
   const r = window.__result;
   document.getElementById('RESULT').textContent =
-    'TOOL_FILLED_FIRST=' + (r.toolFilled === 'WRONG1' ? 'PASS' : 'FAIL') +
+    'TOOL_FILLED_FIRST=' + (r.toolFilled === '111111' ? 'PASS' : 'FAIL') +
     ' | NO_REFILL_AFTER_USER_CLEARS=' + (r.afterClear === '' ? 'PASS' : 'FAIL("' + r.afterClear + '")') +
     ' | USER_VALUE_KEPT=' + (el.value === '409922' ? 'PASS' : 'FAIL("' + el.value + '")') +
     ' | NO_EXTRA_SUBMIT=' + ((r.sent || 0) === r.sentByTool ? 'PASS' : 'FAIL');

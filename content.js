@@ -17,7 +17,7 @@
   if (window.__khamHelperLoaded) return;
   window.__khamHelperLoaded = true;
 
-  const VER = '2.3.0';
+  const VER = '2.4.0';
 
   // ---------------------------------------------------------------- 設定
   // 這個工具只做一件事：**看到元素就幫你填／幫你點**。
@@ -382,30 +382,23 @@
   //   (b) 用「所有 input 的 id/name/type」當快取簽章：燈箱隱藏／顯示時簽章一模一樣 → 連掃都不掃。
   // 現在的規則很簡單：**看得到、是空的、有序號 → 就填**。貴一點也要對。
   function findPresaleField() {
-    let best = null, bestScore = 0;
+    // 規則只有一條：認證畫面（燈箱或整頁區塊，附近有 優先購／Presale／卡友／驗證 字樣）裡的
+    // 文字欄位就是要填的欄位。不看標籤寫「序號」還是「卡號」，那是網站的措辭，跟你無關。
+    // 唯二不碰：驗證碼、密碼／CVV 這類（NEVER_RE），以及長度像完整信用卡號的（maxlength >= 13）。
+    const cands = [];
     for (const el of textInputs()) {
-      if (isCaptchaField(el)) continue;               // 硬性排除，第一道
-      const ctx = fieldContext(el);
-      const own = fieldOwn(el);
-      if (NEVER_RE.test(own)) continue;               // 帳密／個資（只看欄位自己，不被容器文字誤殺）
-      const scope = presaleScope(el);
-      if (CARD_RE.test(ctx)) {
-        if (!scope) continue;                          // 不在認證畫面的卡號欄位：絕不碰
-        const ml = parseInt(el.getAttribute('maxlength'), 10);
-        // 認證用的是「卡號前幾碼」，長度很短；付款用的是完整卡號。
-        // 兩個條件二選一才填：欄位長度 <= 8，或畫面明寫「前 N 碼」。
-        const short = Number.isFinite(ml) && ml <= 8;
-        const prefix = /前\s*[0-9０-９一二三四五六七八九十]+\s*碼/.test(ctx);
-        if (!short && !prefix) continue;
-        if (Number.isFinite(ml) && ml >= 13) continue; // 長度像完整卡號 → 付款欄位，不碰
-      }
-      let score = 0;
-      if (el.id === 'ID1') score += 5;                // 已知的燈箱欄位
-      if (scope) score += 3;                          // 附近寫著「優先購 / Presale」
-      if (CODE_RE.test(ctx) || CARD_RE.test(ctx)) score += 2;   // 欄位叫序號／Presale Code／卡號前幾碼
-      if (score > bestScore) { best = el; bestScore = score; }
+      if (isCaptchaField(el)) continue;               // 硬性排除
+      if (NEVER_RE.test(fieldOwn(el))) continue;      // 帳密／個資／付款安全欄位
+      // 只有「卡號」類欄位才看長度：完整信用卡號是 16 碼，認證用的前幾碼很短。
+      // 序號欄位不看長度 —— 序號本來就可能很長。
+      const ml = parseInt(el.getAttribute('maxlength'), 10);
+      if (CARD_RE.test(fieldContext(el)) && Number.isFinite(ml) && ml >= 13) continue;
+      if (el.id === 'ID1' || presaleScope(el)) cands.push(el);
     }
-    return bestScore >= 3 ? best : null;
+    if (!cands.length) return null;
+    if (cands.length === 1) return cands[0];
+    // 同一個畫面有好幾格時，優先挑標籤像序號／卡號的，否則第一格
+    return cands.find((el) => CODE_RE.test(fieldContext(el)) || CARD_RE.test(fieldContext(el))) || cands[0];
   }
 
   // 同一個優先購區塊裡還有沒有「第二個認證欄位」（密碼、卡號末四碼、生日之類）。
