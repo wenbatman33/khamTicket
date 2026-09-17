@@ -30,6 +30,29 @@
 - **開賣前拿不到 `PERFORMANCE_ID`**，票區頁也進不去，所以開賣前只能守在節目頁。
 - **這些頁面綁 session 的流程狀態**，直接用網址跳進去會被導回首頁；從 B 型（`UTK0204_`）的 session 硬跳電腦配位頁也一樣會被踢掉。工具偵測到被導回首頁會停手並要你重新從節目頁走一次。
 
+## ⚡ 直達票區頁（最快的路）
+
+節目頁 →（等）→ 場次頁 →（等）→ 票區頁，每一段都是時間。
+**票區頁網址只要已登入就能直接開**，所以開賣瞬間最快的路是完全跳過前面兩頁。
+
+在擴充功能填「直達目標」，一行一個，依優先序：
+
+```
+P1FDECMD,P1EMCIC6      # PERFORMANCE_ID,PRODUCT_ID
+P1FDSO0X,P1EMCIC6
+https://kham.com.tw/application/UTK02/UTK0201_000.aspx?PERFORMANCE_ID=…&PRODUCT_ID=…
+```
+
+- 開搶時間一到，**不管你停在哪一頁**，直接開第一個目標的票區頁
+- 進去沒票（連續 5 輪）→ 自動換下一個目標
+- session 失效 → 換下一個目標
+- 全部試完 → 從頭再跑一輪（回流票就是這樣等到的）
+- 已經在其中一個目標的票區頁上時不會亂跳，交給票區頁規則接手
+
+**網址只有在還買得到的時候看得到**（完售後網站會把它從 DOM 移除），
+所以工具每次經過場次頁都會自動把「票價 → PERFORMANCE_ID」記進擴充功能儲存空間與搶票紀錄。
+已還原的 BIGBANG 場次網址見 `tests/fixtures/README.md`。
+
 ## 頁面上的浮動開關
 
 面板標題列右邊有一顆**主開關**（`▶ 開始自動` / `⏸ 停止自動`），直接在網頁上按，
@@ -85,16 +108,31 @@
 BIGBANG 這種活動同一天同一場依票價拆成十幾列，**每一列是一個 `PERFORMANCE_ID`**，
 所以「要買哪個價位」是在這頁決定的，不是票區頁。
 
-- **完售判定（2026-09-17 直接讀真實 DOM 確認）**，`UTK0201_00.aspx?PRODUCT_ID=P1EMCIC6`：
+- **完售判定：只看訂購按鈕，不要看票價的刪除線。**
+  2026-09-17 比對開賣當下存下的真實 HTML 確認 —— `<s>` 刪除線**每一列都有**，跟有沒有票無關：
 
   ```html
-  <!-- 完售列 -->
-  <td data-th="票價(NT$)："> <s><font color="lightblue">9430</font></s> </td>
-  <td> <a href="javascript:;"><button class="gray" onclick="return false;">已售完</button></a></td>
+  <!-- 可訂購（優先購） -->
+  <s><font color='lightblue'>9430</font></s>
+  <button class='red' onclick='VipSellCheck("P1FHHBJX");return false;'>立即訂購</button>
+
+  <!-- 可訂購（一般販售） -->
+  <s><font color='lightblue'>8880</font></s>
+  <button class='red' onclick='doLink("UTK0201_000.aspx?PERFORMANCE_ID=…",323);return false;'>立即訂購</button>
+
+  <!-- 完售 -->
+  <s><font color='lightblue'>9430</font></s>
+  <button class='gray' onclick='return false;'>已售完</button>
   ```
 
-  完售列**根本沒有訂購網址**，所以本來就不會被當成候選；`<s>` 是標籤不是 CSS，
-  用 `fetch` 拉回來的 HTML 一樣判得出來，不必依賴樣式表。
+  **照刪除線判會把每一列都當成完售，開賣時一場都不進，而且靜悄悄的。**
+  正確規則：紅底帶 `VipSellCheck`／`doLink` ＝ 可訂購；灰底「已售完」＝ 完售。
+  真實 HTML 收在 `tests/fixtures/`，`perf_real_vip`／`perf_real_link` 兩項測試就是拿它跑的。
+- **直接貼票區頁網址可以進**（前提是已登入會員）：
+  `UTK0201_000.aspx?PERFORMANCE_ID=…&PRODUCT_ID=…` 開賣時可直接開，略過場次頁。
+  工具在票區頁一樣會接手（規則看 `#salesTable`，不管網址怎麼來的）。
+  （我曾用未登入的瀏覽器測到被導向 `UTK0101_03.aspx`，誤判成「綁 session 流程」——
+  是**沒登入**，不是流程綁定。已還原的場次網址見 `tests/fixtures/README.md`。）
 - **全部完售時不會收工**，會繼續重整監控回流票（這是 9/17 當天發現的漏洞：
   原本 `runPerf` 在找不到候選時直接 return，等於整晚不做事）。
 - BIGBANG 商品編號：2/27 = `P1EMCIC6`、2/28 = `P1EVUYWG`。
@@ -291,6 +329,8 @@ bash tests/run.sh
 | `perf_pick` | 場次頁只點沒有刪除線（有票）的那一列，不碰完售的 |
 | `perf_allsoldout` | 全部完售時**絕對不可以自己點進去**，要留在原地監控 |
 | `presale_wrapper` | 送出鈕被空殼 `div` 包住時，要點到裡面真正可點的那一顆 |
+| `perf_real_vip` | **拿開賣當下的真實 HTML 跑**：優先購列要按網站自己的鈕（`VipSellCheck`） |
+| `perf_real_link` | **拿開賣當下的真實 HTML 跑**：一般列要直接跳它的 `doLink` 網址 |
 | `area_pick` | 票區頁跳過已售完，挑有票且**空位最多**的區進去；自動勾「僅顯示未完售區」 |
 
 這組測試是 2026-09-17 當天付出代價換來的。當天 `sweep()` 因為我誤刪一個 `has()` 工具函式，

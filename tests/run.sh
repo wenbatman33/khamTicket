@@ -10,6 +10,19 @@ run() {
   out=$("$CHROME" --headless=new --disable-gpu --allow-file-access-from-files \
         --virtual-time-budget=9000 --dump-dom "file://$DIR/$1.html" 2>/dev/null)
   case "$1" in
+    direct_jump)
+      # 開賣時間到 → 不經節目頁／場次頁，直接跳第一個票區頁網址
+      if echo "$out" | grep -q 'PERFORMANCE_ID=P1FDECMD'; then echo "PASS（直達第一個目標）";
+      else echo "FAIL（沒有直達）"; fail=1; fi ;;
+    perf_real_vip)
+      # 真實 HTML：票價 9430 是優先購列（VipSellCheck），要按網站的鈕而不是自己組網址
+      if echo "$out" | grep -q 'VIP=P1FHHBJX'; then echo "PASS（優先購列按網站的鈕）";
+      else echo "FAIL（$(echo "$out" | grep -o '<div id="RESULT">[^<]*' | sed 's/.*>//')）"; fail=1; fi ;;
+    perf_real_link)
+      # 真實 HTML：票價 8880 是一般訂購列（doLink），要直接跳它的網址
+      got=$(echo "$out" | grep -o 'PERFORMANCE_ID=P1FHLMTF' | head -1)
+      if [ -n "$got" ]; then echo "PASS（一般列直接跳 P1FHLMTF）";
+      else echo "FAIL（沒跳到 P1FHLMTF）"; fail=1; fi ;;
     perf_allsoldout)
       # 全部完售：不可以導航。還留在原頁面（RESULT 還在）就是沒進去。
       if echo "$out" | grep -q 'id="RESULT"'; then echo "PASS（全部完售，留在原地監控）";
@@ -35,6 +48,9 @@ run presale_box       # 燈箱出現 → 填序號 → 按送出；認證中不�
 run presale_wrapper   # 送出鈕被空殼 div 包住時，要點到裡面真正可點的那顆
 run presale_reopen    # 燈箱關掉再開（同一個 input 被清空）→ 要再填一次並再送出
 run perf_pick         # 場次頁：只點沒有刪除線（有票）的那一列
+run direct_jump       # 開賣瞬間直接跳票區頁，跳過節目頁與場次頁
+run perf_real_vip     # 真實 HTML：優先購列要按網站的鈕（刪除線不得誤判成完售）
+run perf_real_link    # 真實 HTML：一般列要直接跳它的訂購網址
 run perf_allsoldout   # 全部完售時不可以自己點進去
 run area_pick         # 票區頁：跳過已售完，挑有票且空位最多的區進去
 echo "---"

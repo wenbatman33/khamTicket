@@ -1,0 +1,617 @@
+
+<!doctype html>
+<html>
+<head id="Head1"><script type="text/javascript" src="/script/memlib.min.js?v=00.00.00"></script><meta charset="UTF-8" /><meta http-equiv="X-UA-Compatible" content="IE=edge" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+	<link rel="manifest" href="/manifest.json?v=1" />
+	<title>
+	寬宏售票系統
+</title>
+
+	<!-- 處理初始化 Javascript -->
+	<script type="text/javascript">
+	var _vr = '/';
+	var ix = '37';
+	var _up = 'https://imgs2.utiki.com.tw/Data/KHAM/';
+	var _up1 = 'https://imgs2.utiki.com.tw/Data/KHAM_RWD/';
+	var __d = document;
+	var xEMailVerifyStatus = '9';
+	var xUserId = '';
+	var skipTimes = '-99999';
+	
+	var _DV = '';
+	var _ul = '0';
+	var MemberType = 'KHAM';
+
+	//2019/02/22 Jolin add: 判斷是否可以節目可設定預填抽籤
+	var ballot_flag = 'N';;
+	</script>
+
+	<!-- CSS -->
+	<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;700&display=swap" rel="stylesheet">
+	<script>
+	memlib.loadjs('https://imgs2.utiki.com.tw/Data/KHAM_RWD/script/jquery-3.5.0.min.js?v=1');
+	memlib.loadcss('https://imgs2.utiki.com.tw/Data/KHAM_RWD/css/normalize.min.css?v=00.00.01');
+	memlib.loadcss('https://imgs2.utiki.com.tw/Data/KHAM_RWD/css/style.min.css?v=00.00.41');
+	memlib.loadcss('https://imgs2.utiki.com.tw/Data/KHAM_RWD/css/member.min.css?v=00.00.12');
+	</script>
+	<link href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.min.css" integrity="sha384-kcAOn9fN4XSd+TGsNu2OQKSuV5ngOwt7tg73O4EpaD91QXvrfgvf0MR7/2dUjoI6" crossorigin="anonymous" rel="stylesheet">
+	
+	<!-- 輪播 -->
+	
+
+	<!-- JS -->
+	<script>
+	memlib.loadjs('https://imgs2.utiki.com.tw/Data/KHAM_RWD/js/action2.min.js?v=00.00.08');
+	memlib.loadjs('https://imgs2.utiki.com.tw/Data/KHAM_RWD/js/action-index.min.js?v=00.00.02');
+	
+	memlib.loadjs('https://imgs2.utiki.com.tw/Data/KHAM_RWD/script/jquery.min.tmp.js?v=1');
+	memlib.loadjs('https://imgs2.utiki.com.tw/Data/KHAM_RWD/script/Base.min.js?v=00.00.00');
+	memlib.loadjs('https://imgs2.utiki.com.tw/Data/KHAM_RWD/script/master.min.js?v=00.00.20');
+
+	var	script	=	document.createElement("script");
+	script.type	=	"text/javascript";
+	(document.head || document.getElementsByTagName('head')[0]).appendChild(script);
+	script.src	=	_vr + 'offline.js?' + Math.floor(Date.now() / 1000);
+	</script>
+	<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js" integrity="sha512-4DaiBX8rsgOoBSNLceQ/IixDF+uUDV0hJrQX/MJ9RwJZCDqbEp0EjIQodGxszPtTpwlenJznR2jkgDWqj4Hs+A==" crossorigin="anonymous"></script>
+
+	<!-- Google tag (gtag.js) -->
+	<script async src="https://www.googletagmanager.com/gtag/js?id=G-CT5W95TMXT"></script>
+	<script>
+	window.dataLayer = window.dataLayer || [];
+	function gtag(){dataLayer.push(arguments);}
+	gtag('js', new Date());
+
+	gtag('config', 'G-CT5W95TMXT');
+	</script>
+	<!-- Google tag end-->
+
+	
+<script>
+	memlib.loadjs('https://imgs2.utiki.com.tw/Data/KHAM_RWD/Script/UTK0201_00.min.js?v=00.00.00');
+</script>
+<style>
+	/* Art css Start */
+	button{ width: 80%;}
+	.eventTABLE th:not(:last-child){ text-align: left;}
+	.eventTABLE tr td:nth-child(2){ padding-right: 20px;}
+	@media screen and (min-width: 450px){ 
+	.eventTABLE tr td:last-child { text-align: center; min-width: 100px; }
+	}
+	@media screen and (min-width: 750px){
+        .eventTABLE tr td:first-child{ min-width: 180px;}
+	}
+	/* Art css End */
+
+	.REMARK	 a:link {
+		color:blue;
+		text-decoration:underline;
+		
+	}
+	 .REMARK a:visited {
+		color:blue;
+		text-decoration:underline;
+	}
+	 .REMARK a:hover {
+		color:#F60;
+		text-decoration:underline;
+	}
+	 .REMARK a:active {
+		color:#F60;
+		text-decoration:underline;
+	}
+	a { word-wrap: break-word; }
+</style>
+
+
+	<script type="text/javascript">
+	
+        var cm = '';
+
+        // 2018.1.31 chihpin add: 修正 chrome 咬住 alert 視窗問題
+        var isChrome = navigator.userAgent.toLowerCase().indexOf("chrome") > -1;  // 瀏覽器是否為chrome
+        // 重新定義 FormEvent 相關 method (FormEvent = _fe())
+        if (typeof FormEvent !== 'undefined') {
+            FormEvent.chkDate = function (a) { var b = _se(a); if (b.readOnly) { return } if (b.value == "") { return } if (_df == 1 && !Check.isCDate(_fz(b.value, 7)) || _df == 2 && !Check.isDate(b.value)) { Message.showMessage("105"); b.blur(); } else { b.value = _df == 1 ? _du().formatCDate(b.value) : _du().formatDate(b.value) } };
+            FormEvent.chkTime = function (a) { var b = _se(a); if (b.readOnly) { return } if (b.value == "") { return } if (!Check.isTime(b.value)) { b.value = ""; Message.showMessage("106"); b.blur(); } else { b.value = b.value._r(/:/g, ""); if (b.value.length == 4) { b.value = b.value._s(0, 2) + ":" + b.value._s(2, 4) } else { if (b.value.length == 6) { b.value = b.value._s(0, 2) + ":" + b.value._s(2, 4) + ":" + b.value._s(4, 6) } } } };
+            FormEvent.checkIP = function (a) { var b = _se(a); if (b.readOnly) { return } if (!Check.checkIP(b.value)) { Message.showMessage("124"); b.blur(); } };
+            FormEvent.checkTEL = function (a) { var b = _se(a); if (b.readOnly) { return } if (!Check.checkTEL(b.value)) { Message.showMessage("125"); b.blur(); } };
+            FormEvent.checkURL = function (a) { var b = _se(a); if (b.readOnly) { return } if (!Check.checkURL(b.value)) { Message.showMessage("126"); b.blur(); } };
+            FormEvent.checkMail = function (a) { var b = _se(a); if (b.readOnly) { return } if (!Check.checkMail(b.value)) { Message.showMessage("127"); b.blur(); } };
+            FormEvent.lockAlphaNum1 = function (a) { var b = _se(a); if (b.readOnly) { return } if (StrUtil.getBLen(b.value) != b.value.length) { Message.showMessage("128"); b.blur(); } };
+	}
+
+	
+	function StringBuilder() {
+		console.log(this);
+		this._stringArray = new Array();
+	}
+
+	StringBuilder.prototype.append = function (str) {
+		this._stringArray.push('<li><span class="glyphicon glyphicon-remove" aria-hidden="true"></span>' + str + '</li>');
+	}
+
+	StringBuilder.prototype.toString = function (joinGap) {
+		return this._stringArray.join(joinGap);
+	}
+	</script>
+
+	<script type="text/javascript">
+	if ('serviceWorker' in navigator) 
+	{
+		navigator.serviceWorker.getRegistrations().then(function(registrations) {
+			for(let registration of registrations) {
+				registration.unregister();
+			} 
+		});
+//console.log('start reg -> ');
+	//	navigator.serviceWorker.register(_vr + 'service-worker.min.js?v=00.00.04')
+	//		.then(function (reg){console.log('完成 SW 設定!', reg);})
+	//		.catch(function(err){console.log('SW Error!', err);});
+	}
+	</script>
+</head>
+
+
+<body class="bg_index">
+
+	<!-- Google Tag Manager -->
+	<noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-PWST7N"
+	height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+	<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+	new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+	j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+	'//www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+	})(window,document,'script','dataLayer','GTM-PWST7N');</script>
+	<!-- End Google Tag Manager -->
+	<form method="post" action="./UTK0201_00.aspx?PRODUCT_ID=P1EMCIC6" id="form1">
+<div class="aspNetHidden">
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="" />
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="/wEPDwULLTExMTI3MjIxOThkZIRul/YBTgfCO6DocHs8fTkRkTNx" />
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['form1'];
+if (!theForm) {
+    theForm = document.form1;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<script src="/WebResource.axd?d=j7tQCAZDS-VdBAQIGLt-S4EuOS99SjjZg3aHxJunDJIOR3URKH9dluxgqMbPhIsaBAW0nYU29XrVcwMOcGuZbWG8GmA1&amp;t=638901829900000000" type="text/javascript"></script>
+
+
+<script src="/ScriptResource.axd?d=SbHilO2Ce2700koVMl4_AnFqUF6byhPiqo1KZwDcwwpA4DqONfgoHwlUSs3pPNNR1hUOuQvwFr2Vino_YgIWZe4GA1S3qMkdcAX9sPKYN9rVH6T-TSen0dZtVjUbG7pGOy2T8-q-8oNVOi9BE8K1emv5Sa3ka1zetE4cC3eN7XBWzWGz0&amp;t=5c0e0825" type="text/javascript"></script>
+<script src="/ScriptResource.axd?d=obr6mChfWFEHZEUWz-4OtUZ-qYSHKvMfJhJkAf64BY3EvSzn50RGTomJQk65sH2L7nTO5L7E85hPuqHUQELA64pkywsh5QOv9RkodjNY1PRFNw6B40Zflwk47GNQ-bg8pmKNfF7dQnpEdgQWViTNEkd7RU6Eh7E3XUsEu8Y4hYOyklJ6HJ62SM-dGZvBgrg4rtH6PQ2&amp;t=5c0e0825" type="text/javascript"></script>
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="C8CF2D21" />
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="/wEdAAI035jrI2qmp+vpWw+XP4gtm4rPdvKkXvsCTFXGIqgOxPt9CeF52iwn2KgU53rRzWZp+JTE" />
+</div>
+        <script type="text/javascript">
+//<![CDATA[
+Sys.WebForms.PageRequestManager._initialize('ctl00$ScriptManager1', 'form1', [], [], [], 300, 'ctl00');
+//]]>
+</script>
+
+	<div id="dialog-message" title="訊息視窗" style="font-family:微軟正黑體;z-index:2147483647;display:none;"></div>
+
+	<!--燈箱-->
+	
+
+	<!--主選單-->
+	<div class="header">
+	<div class="menuBG"></div>
+	<nav class="header_menu">
+		<a href="../UTK01/UTK0101_.aspx" id="logo">
+			<img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/kham-logo-mobile.png?v=2" class="forMobile" alt=""/>
+			<img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/kham-logo.png?v=1" class="forPC" alt=""/>
+		</a>
+		<ul>
+		
+			<li><a href="javascript:;">節目資訊</a>
+				<ul class="submenu">	
+					<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=205">演唱會</a></li>
+					<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=80">音樂劇</a></li>
+					<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=231">展覽</a></li>
+					<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=116">戲劇</a></li>
+					<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=77">音樂</a></li>
+					<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=100">舞蹈</a></li>
+					<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=129">親子</a></li>
+					<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=218">體育</a></li>
+					
+					<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=139">國外</a></li>
+					<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=98">套票</a></li>
+					<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=275">商品套票</a></li>
+					<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=301">其它</a></li>
+				</ul>
+			</li>
+				
+			<li><a href="javascript:;">購票/取票</a>
+				<ul class="submenu">
+					<li><a href="../UTK01/UTK0108_.aspx">購票須知</a></li>
+					<li><a href="../UTK01/UTK0108_01.aspx">網路/手機APP購票</a></li>
+					<li><a href="../UTK01/UTK0108_06.aspx">實名制須知</a></li>
+					<li><a href="../UTK01/UTK0108_02.aspx">傳真刷卡購票</a></li>
+					<li><a href="../UTK01/UTK0108_03.aspx">端點購票</a></li>
+					<li><a href="../UTK01/UTK0108_04.aspx">退票方式</a></li>
+					<li><a href="../UTK01/UTK0108_05.aspx">如何確認訂票</a></li>
+				</ul>
+			</li>
+			
+			
+			<li><a href="../UTK01/UTK0123_.aspx">精采回顧</a></li>  
+			<li><a href="../UTK01/UTK0112_.aspx?TP=1">常見問題</a></li>   
+			<li><a href="../UTK01/UTK0101_06.aspx?TYPE=1&CATEGORY=228">商品專區</a></li>
+			
+		</ul>
+		<div>
+			
+			<div id="cart_end"><button class="red" id="quickbuy" style="display: none;">剩餘時間 <span>01:20</span></button></div>
+			<div id="user">
+				
+				<a href="javascript:;" onclick="doLogin()"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/icon_user.png" alt=""/></a>
+				
+			</div>
+			<a href="../UTK02/UTK0206_.aspx" id="cart">
+				<img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/icon_cart.png" alt=""/>
+				
+			</a>     
+
+			<a href="#" id="menubutton"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/menu.svg" alt=""/></a>
+		</div>
+	</nav>
+	</div> 
+
+	<!--內文區塊-->  
+	
+	<div id="content">	
+	
+<input type="hidden" name="ctl00$ContentPlaceHolder1$PRODUCT_ID" id="PRODUCT_ID" value="P1EMCIC6" />
+
+<!--步驟-->
+
+
+<ul class="step">
+	<li class='active'><img src='https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/step_select_left.png' alt=''><span>活動／商品選擇</span><img src='https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/step_select_right.png' alt=''></li>
+<li><span>座位／數量</span></li>
+<li><span>購物車</span></li>
+<li><span>結帳</span></li>
+<li><span>訂購完成</span></li>
+
+</ul>
+
+
+
+<!--活動描述-->
+<div class="eventTitle">【2/27場次】BIGBANG 2026-2027 WORLD TOUR〈 XX：COSMOS 〉IN KAOHSIUNG</div>
+<div id="DIV_REMARK" class="description">
+	
+	<span id="REMARK" class="REMARK"><ul>
+<li>
+<p><span style="font-family: 微軟正黑體, &quot;zapf dingbats&quot;; font-size: medium;">進行購票前，請務必完整瞭解活動各事項規範及相關優惠票券說明，再行購票；一旦進行購票或退票作業流程，將視同您已瞭解並同意遵守該活動相關事項規定。</span></p>
+</li>
+</ul></span>
+</div>
+<!--活動場次-->
+<table width="100%" border="0" cellspacing="0" cellpadding="0" class="eventTABLE">
+<tbody>
+	<tr>
+		<th scope="col">活動日期 Date and Time</th>
+		<th scope="col">地點 Location</th>
+		<th scope="col">票價 Price</th>
+		<th scope="col">訂購 To order</th>
+	</tr>
+	
+	<tr>
+		<td>
+			2027/02/27(六)18:30
+			
+		</td>
+		<td>
+			
+			<a id="PLACE_ADDRESS" href="http://maps.google.com.tw/maps?f=q&amp;hl=zh-TW&amp;geocode=&amp;t=&amp;z=16&amp;q=%e9%ab%98%e9%9b%84%e5%b8%82%e5%b7%a6%e7%87%9f%e5%8d%80%e4%b8%96%e9%81%8b%e5%a4%a7%e9%81%93100%e8%99%9f(%e6%8d%b7%e9%81%8b%e4%b8%96%e9%81%8b%e7%ab%99)" target="GoogleMap"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/locate.png" width="20" height="20" alt="" /></a>&nbsp;
+			<span id="PLACE_NAME">高雄國家體育場</span>
+			<br>【9430元票價】BIGBANG 2026-2027 WORLD TOUR〈 XX：COSMOS 〉IN KAOHSIUNG
+		</td>
+		<td data-th="票價(NT$)：">
+			<s><font color='lightblue'>9430</font></s>
+			
+		</td>
+		<td>
+			<a href='javascript:;' ><button class='red' onclick='VipSellCheck("P1FDECMD");return false;'>立即訂購</button></a>
+		</td>
+	</tr>
+	
+	<tr>
+		<td>
+			2027/02/27(六)18:30
+			
+		</td>
+		<td>
+			
+			<a id="PLACE_ADDRESS" href="http://maps.google.com.tw/maps?f=q&amp;hl=zh-TW&amp;geocode=&amp;t=&amp;z=16&amp;q=%e9%ab%98%e9%9b%84%e5%b8%82%e5%b7%a6%e7%87%9f%e5%8d%80%e4%b8%96%e9%81%8b%e5%a4%a7%e9%81%93100%e8%99%9f(%e6%8d%b7%e9%81%8b%e4%b8%96%e9%81%8b%e7%ab%99)" target="GoogleMap"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/locate.png" width="20" height="20" alt="" /></a>&nbsp;
+			<span id="PLACE_NAME">高雄國家體育場</span>
+			<br>【9380元票價】BIGBANG 2026-2027 WORLD TOUR〈 XX：COSMOS 〉IN KAOHSIUNG
+		</td>
+		<td data-th="票價(NT$)：">
+			<s><font color='lightblue'>9380</font></s>
+			
+		</td>
+		<td>
+			<a href='javascript:;' ><button class='red' onclick='VipSellCheck("P1FDSO0X");return false;'>立即訂購</button></a>
+		</td>
+	</tr>
+	
+	<tr>
+		<td>
+			2027/02/27(六)18:30
+			
+		</td>
+		<td>
+			
+			<a id="PLACE_ADDRESS" href="http://maps.google.com.tw/maps?f=q&amp;hl=zh-TW&amp;geocode=&amp;t=&amp;z=16&amp;q=%e9%ab%98%e9%9b%84%e5%b8%82%e5%b7%a6%e7%87%9f%e5%8d%80%e4%b8%96%e9%81%8b%e5%a4%a7%e9%81%93100%e8%99%9f(%e6%8d%b7%e9%81%8b%e4%b8%96%e9%81%8b%e7%ab%99)" target="GoogleMap"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/locate.png" width="20" height="20" alt="" /></a>&nbsp;
+			<span id="PLACE_NAME">高雄國家體育場</span>
+			<br>【8880元票價】BIGBANG 2026-2027 WORLD TOUR〈 XX：COSMOS 〉IN KAOHSIUNG
+		</td>
+		<td data-th="票價(NT$)：">
+			<s><font color='lightblue'>8880</font></s>
+			
+		</td>
+		<td>
+			<a href='javascript:;' ><button class='red' onclick='VipSellCheck("P1FDWY6H");return false;'>立即訂購</button></a>
+		</td>
+	</tr>
+	
+	<tr>
+		<td>
+			2027/02/27(六)18:30
+			
+		</td>
+		<td>
+			
+			<a id="PLACE_ADDRESS" href="http://maps.google.com.tw/maps?f=q&amp;hl=zh-TW&amp;geocode=&amp;t=&amp;z=16&amp;q=%e9%ab%98%e9%9b%84%e5%b8%82%e5%b7%a6%e7%87%9f%e5%8d%80%e4%b8%96%e9%81%8b%e5%a4%a7%e9%81%93100%e8%99%9f(%e6%8d%b7%e9%81%8b%e4%b8%96%e9%81%8b%e7%ab%99)" target="GoogleMap"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/locate.png" width="20" height="20" alt="" /></a>&nbsp;
+			<span id="PLACE_NAME">高雄國家體育場</span>
+			<br>【8380元票價】BIGBANG 2026-2027 WORLD TOUR〈 XX：COSMOS 〉IN KAOHSIUNG
+		</td>
+		<td data-th="票價(NT$)：">
+			<s><font color='lightblue'>8380</font></s>
+			
+		</td>
+		<td>
+			<a href='javascript:;' ><button class='red' onclick='VipSellCheck("P1FE10V3");return false;'>立即訂購</button></a>
+		</td>
+	</tr>
+	
+	<tr>
+		<td>
+			2027/02/27(六)18:30
+			
+		</td>
+		<td>
+			
+			<a id="PLACE_ADDRESS" href="http://maps.google.com.tw/maps?f=q&amp;hl=zh-TW&amp;geocode=&amp;t=&amp;z=16&amp;q=%e9%ab%98%e9%9b%84%e5%b8%82%e5%b7%a6%e7%87%9f%e5%8d%80%e4%b8%96%e9%81%8b%e5%a4%a7%e9%81%93100%e8%99%9f(%e6%8d%b7%e9%81%8b%e4%b8%96%e9%81%8b%e7%ab%99)" target="GoogleMap"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/locate.png" width="20" height="20" alt="" /></a>&nbsp;
+			<span id="PLACE_NAME">高雄國家體育場</span>
+			<br>【7980元票價】BIGBANG 2026-2027 WORLD TOUR〈 XX：COSMOS 〉IN KAOHSIUNG
+		</td>
+		<td data-th="票價(NT$)：">
+			<s><font color='lightblue'>7980</font></s>
+			
+		</td>
+		<td>
+			<a href='javascript:;' ><button class='red' onclick='VipSellCheck("P1FE373S");return false;'>立即訂購</button></a>
+		</td>
+	</tr>
+	
+	<tr>
+		<td>
+			2027/02/27(六)18:30
+			
+		</td>
+		<td>
+			
+			<a id="PLACE_ADDRESS" href="http://maps.google.com.tw/maps?f=q&amp;hl=zh-TW&amp;geocode=&amp;t=&amp;z=16&amp;q=%e9%ab%98%e9%9b%84%e5%b8%82%e5%b7%a6%e7%87%9f%e5%8d%80%e4%b8%96%e9%81%8b%e5%a4%a7%e9%81%93100%e8%99%9f(%e6%8d%b7%e9%81%8b%e4%b8%96%e9%81%8b%e7%ab%99)" target="GoogleMap"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/locate.png" width="20" height="20" alt="" /></a>&nbsp;
+			<span id="PLACE_NAME">高雄國家體育場</span>
+			<br>【6980元票價】BIGBANG 2026-2027 WORLD TOUR〈 XX：COSMOS 〉IN KAOHSIUNG
+		</td>
+		<td data-th="票價(NT$)：">
+			<s><font color='lightblue'>6980</font></s>
+			
+		</td>
+		<td>
+			<a href='javascript:;' ><button class='red' onclick='VipSellCheck("P1FE5AST");return false;'>立即訂購</button></a>
+		</td>
+	</tr>
+	
+	<tr>
+		<td>
+			2027/02/27(六)18:30
+			
+		</td>
+		<td>
+			
+			<a id="PLACE_ADDRESS" href="http://maps.google.com.tw/maps?f=q&amp;hl=zh-TW&amp;geocode=&amp;t=&amp;z=16&amp;q=%e9%ab%98%e9%9b%84%e5%b8%82%e5%b7%a6%e7%87%9f%e5%8d%80%e4%b8%96%e9%81%8b%e5%a4%a7%e9%81%93100%e8%99%9f(%e6%8d%b7%e9%81%8b%e4%b8%96%e9%81%8b%e7%ab%99)" target="GoogleMap"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/locate.png" width="20" height="20" alt="" /></a>&nbsp;
+			<span id="PLACE_NAME">高雄國家體育場</span>
+			<br>【6480元票價】BIGBANG 2026-2027 WORLD TOUR〈 XX：COSMOS 〉IN KAOHSIUNG
+		</td>
+		<td data-th="票價(NT$)：">
+			<s><font color='lightblue'>6480</font></s>
+			
+		</td>
+		<td>
+			<a href='javascript:;' ><button class='red' onclick='VipSellCheck("P1FE7FKQ");return false;'>立即訂購</button></a>
+		</td>
+	</tr>
+	
+	<tr>
+		<td>
+			2027/02/27(六)18:30
+			
+		</td>
+		<td>
+			
+			<a id="PLACE_ADDRESS" href="http://maps.google.com.tw/maps?f=q&amp;hl=zh-TW&amp;geocode=&amp;t=&amp;z=16&amp;q=%e9%ab%98%e9%9b%84%e5%b8%82%e5%b7%a6%e7%87%9f%e5%8d%80%e4%b8%96%e9%81%8b%e5%a4%a7%e9%81%93100%e8%99%9f(%e6%8d%b7%e9%81%8b%e4%b8%96%e9%81%8b%e7%ab%99)" target="GoogleMap"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/locate.png" width="20" height="20" alt="" /></a>&nbsp;
+			<span id="PLACE_NAME">高雄國家體育場</span>
+			<br>【4980元票價】BIGBANG 2026-2027 WORLD TOUR〈 XX：COSMOS 〉IN KAOHSIUNG
+		</td>
+		<td data-th="票價(NT$)：">
+			<s><font color='lightblue'>4980</font></s>
+			
+		</td>
+		<td>
+			<a href='javascript:;' ><button class='red' onclick='VipSellCheck("P1FE9K4B");return false;'>立即訂購</button></a>
+		</td>
+	</tr>
+	
+	<tr>
+		<td>
+			2027/02/27(六)18:30
+			
+		</td>
+		<td>
+			
+			<a id="PLACE_ADDRESS" href="http://maps.google.com.tw/maps?f=q&amp;hl=zh-TW&amp;geocode=&amp;t=&amp;z=16&amp;q=%e9%ab%98%e9%9b%84%e5%b8%82%e5%b7%a6%e7%87%9f%e5%8d%80%e4%b8%96%e9%81%8b%e5%a4%a7%e9%81%93100%e8%99%9f(%e6%8d%b7%e9%81%8b%e4%b8%96%e9%81%8b%e7%ab%99)" target="GoogleMap"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/locate.png" width="20" height="20" alt="" /></a>&nbsp;
+			<span id="PLACE_NAME">高雄國家體育場</span>
+			<br>【3980元票價】BIGBANG 2026-2027 WORLD TOUR〈 XX：COSMOS 〉IN KAOHSIUNG
+		</td>
+		<td data-th="票價(NT$)：">
+			<s><font color='lightblue'>3980</font></s>
+			
+		</td>
+		<td>
+			<a href='javascript:;' ><button class='red' onclick='VipSellCheck("P1FEBNTC");return false;'>立即訂購</button></a>
+		</td>
+	</tr>
+	
+	<tr>
+		<td>
+			2027/02/27(六)18:30
+			
+		</td>
+		<td>
+			
+			<a id="PLACE_ADDRESS" href="http://maps.google.com.tw/maps?f=q&amp;hl=zh-TW&amp;geocode=&amp;t=&amp;z=16&amp;q=%e9%ab%98%e9%9b%84%e5%b8%82%e5%b7%a6%e7%87%9f%e5%8d%80%e4%b8%96%e9%81%8b%e5%a4%a7%e9%81%93100%e8%99%9f(%e6%8d%b7%e9%81%8b%e4%b8%96%e9%81%8b%e7%ab%99)" target="GoogleMap"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/locate.png" width="20" height="20" alt="" /></a>&nbsp;
+			<span id="PLACE_NAME">高雄國家體育場</span>
+			<br>【2980元票價】BIGBANG 2026-2027 WORLD TOUR〈 XX：COSMOS 〉IN KAOHSIUNG
+		</td>
+		<td data-th="票價(NT$)：">
+			<s><font color='lightblue'>2980</font></s>
+			
+		</td>
+		<td>
+			<a href='javascript:;' ><button class='red' onclick='VipSellCheck("P1FEDXWX");return false;'>立即訂購</button></a>
+		</td>
+	</tr>
+	
+</tbody>        
+</table>            
+
+        </div>
+	
+        <!-- 頁尾-->
+        <div class="footer">
+		<div class="wrapper">
+			<div>
+				<span>|</span>
+				<a href="http://www.khaminc.com.tw" target="_blank" rel="noopener noreferrer">關於寛宏藝術KHAMINC</a>
+				<span>|</span>
+				<a href="../UTK13/UTK1307_.aspx">隱私權政策</a>
+				<span>|</span>
+				<a href="../UTK13/UTK1307_01.aspx">服務條款</a>
+				<span>|</span>
+				<a href="../UTK13/UTK1307_02.aspx">防詐騙宣導</a><br>
+				
+				<a href="https://itunes.apple.com/tw/app/kuan-hong-shou-piao-xi-tong/id1137055503?l=zh&mt=8"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/itunes.png" alt="" ></a>
+				<a href="https://play.google.com/store/apps/details?id=com.acer.khamtickets"><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/googleplay1.png" alt=""></a>
+				
+				<p class="tip forPC">COPYRIGHT@KHAM.ALL RIGHT RESERVERED</p>
+			</div>
+			<div>
+				<table>
+					<tbody>
+					<tr>
+						<td><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/footericon.png" alt=""></td>
+						<td>khamtw@gmail.com</td>
+						
+						<td rowspan="3">&nbsp;</td>
+					</tr>
+					<tr>
+						<td><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/footericon-02.png" alt=""></td>
+						<td>週一至週五 9:00am~12:00pm；1:00pm~6:00pm (遇國定假日休)</td>
+					</tr>
+					<tr>
+						<td><img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/footericon-03.png" alt=""></td>
+						<td>票務服務專線：07-7809900</td>
+					</tr>
+					<tr>
+						<td colspan="2" style="line-height: 20px;">Supported by 宏碁資訊服務股份有限公司<img src="https://imgs2.utiki.com.tw/Data/KHAM_RWD/images/AEB.png" width="55" alt=""></td>
+					</tr>
+					</tbody>
+				</table>
+				
+				<p class="tip">瀏覽器建議使用GoogleChrome，並請勿使用無痕模式瀏覽，以免驗證失敗</p>
+				
+				<p class="tip forMobile">COPYRIGHT@KHAM.ALL RIGHT RESERVERED</p>
+			</div>
+		</div>		
+        </div>
+
+	<!--優先預購燈箱-->
+	
+<!--優先預購燈箱-->
+<div class="popoutBG" style="display:none">
+	<div class="popout index">
+		<div class="eventTitle">優先購買</div>
+		<hr>
+		<div class="memberContent" style="margin-bottom: 20px; padding: 10px 40px;">
+			<h3 style="text-align: center;" id="L_NAME_TITLE"></h3>
+			<table border="0" cellspacing="0" cellpadding="3" class="login">
+				<tbody>
+					<tr>
+						<td align="center">
+							<span class="highlight">＊</span><span ID="L_ID1"></span><br>
+							<input type="text" name="textfield" id="ID1">
+						</td>
+					</tr>
+					<tr id="TR2">
+						<td valign="top">
+							<span class="highlight">＊</span><span ID="L_ID2"></span><br>
+							<input type="text" name="textfield2" id="ID2">
+						</td>
+					</tr>
+				</tbody>
+			</table>
+			<p style="text-align: center; margin-top: 20px;">
+				<a href="javascript:;">
+					<button class="red" style="padding: 10px 20px; letter-spacing: 2px;" onclick="DoVIPLogin();return false;">送出</button>
+				</a>
+			</p>
+		</div>
+	</div>
+</div>    
+
+
+	<script type="text/javascript">
+	$(function(){
+		getNoReadPushMessages();
+	});
+	</script>
+    
+
+<script type="text/javascript">
+//<![CDATA[
+var maxWaitTime = 0;document.body.style.display = '';;try{$(_d()).ready(Grid.setGridEvent);$(_d()).ready(iniGridClickColor);$(_d()).ready(SortTable.sortables_init);}catch(ex){};try{reSize();}catch(ex){};try{switchLabel();}catch(ex){};var	proj	=	'售票平台_GCP';try{$(_d()).ready(function(){try{gridOuterHTML=_('DataGrid').outerHTML;setColumnHide()}catch(ex){}})}catch(ex){};try{Form.iniFormColor();}catch(ex){};;//]]>
+</script>
+</form>
+</body>
+</html>

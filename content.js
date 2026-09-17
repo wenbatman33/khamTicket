@@ -17,7 +17,7 @@
   if (window.__khamHelperLoaded) return;
   window.__khamHelperLoaded = true;
 
-  const VER = '1.9.0';
+  const VER = '1.10.0';
 
   // ---------------------------------------------------------------- 設定
   const DEFAULTS = {
@@ -27,6 +27,7 @@
     perfKeyword: '',         // 場次關鍵字（多場次時用，如 2/27），留空 = 第一個可訂購的
     presaleCode: '',         // 優先購序號／認證碼：看到欄位就自動填入，照原樣填不裁切
     autoSubmitPresale: true, // 序號填好就自動按送出（跟主開關脫鉤：填了卻不送等於做一半）
+    directUrls: '',          // 直達票區頁：一行一個（完整網址、或 PERFORMANCE_ID[,PRODUCT_ID]），依優先序
     priceTargets: '',        // 票價優先順序，一行一個（場次頁依票價拆列的活動用）
     crossPrice: true,        // 票區頁背景監控其他票價的場次，有票就跳過去
     targets: '',             // 票區優先順序（或票價），一行一個
@@ -478,6 +479,66 @@
     }
   }
 
+  // ================================================================ 直達票區頁
+  // 2026-09-17 的教訓：節目頁 →（等）→ 場次頁 →（等）→ 票區頁，每一段都是時間。
+  // 票區頁網址只要**已登入**就能直接開（使用者實測），所以開賣瞬間最快的路是：
+  // 完全跳過前面兩頁，直接開想要的那個票價的票區頁。
+  // 網址只有在還買得到的時候看得到，所以工具平時就把票價 → PERFORMANCE_ID 存起來（savePerfList）。
+  const DIRECT_KEY = 'kham_direct_i';
+  const DIRECT_AT_KEY = 'kham_direct_at';
+
+  // 一行可以是：完整網址 / 只有 PERFORMANCE_ID / 「PERFORMANCE_ID,PRODUCT_ID」
+  function directUrl(line) {
+    const t = String(line || '').trim();
+    if (!t) return '';
+    if (/^https?:\/\//i.test(t)) return t;
+    if (/^\/|^application\//i.test(t)) return new URL(t.replace(/^application/, '/application'), location.origin).href;
+    if (/UTK02\d/i.test(t)) return new URL('/application/UTK02/' + t.replace(/^.*UTK02\//i, ''), location.origin).href;
+    const [perf, prod] = t.split(/[,\s|]+/);
+    if (!/^[A-Za-z0-9]{4,}$/.test(perf || '')) return '';
+    const p = new URLSearchParams({ PERFORMANCE_ID: perf });
+    if (prod) p.set('PRODUCT_ID', prod);
+    return new URL('/application/UTK02/UTK0201_000.aspx?' + p.toString(), location.origin).href;
+  }
+
+  function directTargets() { return parseList(S.directUrls).map(directUrl).filter(Boolean); }
+
+  // 跳下一個目標。全部試完就從頭再來一輪（回流票就是這樣等到的）。
+  function directNext(why) {
+    const list = directTargets();
+    if (!list.length) return false;
+    const last = toInt(sessionStorage.getItem(DIRECT_AT_KEY), 0);
+    if (Date.now() - last < 700) return false;          // 防止連續彈跳
+    let i = toInt(sessionStorage.getItem(DIRECT_KEY), 0);
+    if (i >= list.length) i = 0;
+    sessionStorage.setItem(DIRECT_KEY, String(i + 1));
+    sessionStorage.setItem(DIRECT_AT_KEY, String(Date.now()));
+    logEvent('direct_jump', { i, why, url: list[i] }, true);
+    toast('直達第 ' + (i + 1) + '/' + list.length + ' 個目標（' + why + '）');
+    location.href = list[i];
+    return true;
+  }
+
+  // 已經在其中一個目標的票區頁上了嗎（在的話就別再跳）
+  function onDirectTarget() {
+    const perf = PERF_ID;
+    return !!perf && directTargets().some((u) => new URL(u).searchParams.get('PERFORMANCE_ID') === perf);
+  }
+
+  async function directLoop() {
+    if (!directTargets().length) return false;
+    if (has('#salesTable') || has('#AREA_DIV')) return false;   // 已經在票區頁，交給票區頁規則
+    while (S.enabled) {
+      const wait = startTimestamp() - Date.now();
+      if (wait <= 0) return directNext('開賣直達');
+      showPanel(['● 直達待命｜' + (S.startAt || '立即'), '倒數 ' + fmtCountdown(wait),
+        '時間一到直接開票區頁，跳過節目頁與場次頁',
+        '目標 ' + directTargets().length + ' 個' + (document.hidden ? '｜⚠️ 分頁在背景可能被節流' : '')]);
+      await sleep(Math.min(500, wait));
+    }
+    return false;
+  }
+
   // ================================================================ 場次頁（決定買哪個票價）
   // BIGBANG 這種活動：同一天同一場，依票價拆成十幾列，每一列是一個 PERFORMANCE_ID。
   // 2026-09-17 事故：工具不看有沒有票就點「立即訂購」，全部完售了還一路點進去。
@@ -497,49 +558,35 @@
     return ((perfRowOf(el).innerText || perfRowOf(el).textContent || '')).replace(/\s+/g, ' ').trim();
   }
 
-  // 完售標記：網站把票價畫上刪除線。
-  // 2026-09-17 直接看真實 DOM 確認（UTK0201_00.aspx?PRODUCT_ID=P1EMCIC6）：
-  //   完售列：<td><s><font color="lightblue">9430</font></s></td>
-  //          <td><a href="javascript:;"><button class="gray" onclick="return false;">已售完</button></a></td>
-  //   有票列：票價無 <s>，按鈕是 doLink(...) 的「立即訂購」
-  // 也就是說完售列**根本沒有訂購網址**，本來就不會成為候選；<s> 是標籤不是 CSS，
-  // 所以用 fetch 拉回來的 HTML 一樣判得出來（不必依賴樣式表）。
-  // 活的頁面用 computed style 判最準，
-  // 順便把帶刪除線的 class 記起來 —— 之後用 fetch 拉回來的 HTML（沒有樣式表）也能照同一個 class 判。
-  const LT_KEY = 'kham_lt_class';
-  function rememberLt(cls) {
-    const c = String(cls || '').trim();
-    if (!c) return;
-    try {
-      const set = new Set(JSON.parse(sessionStorage.getItem(LT_KEY) || '[]'));
-      c.split(/\s+/).forEach((x) => set.add(x));
-      sessionStorage.setItem(LT_KEY, JSON.stringify([...set].slice(0, 20)));
-    } catch (e) {}
-  }
-  function ltClasses() {
-    try { return JSON.parse(sessionStorage.getItem(LT_KEY) || '[]'); } catch (e) { return []; }
-  }
+  // 完售判定：**只看訂購按鈕**，不要看票價的刪除線。
+  //
+  // 2026-09-17 事故（第四次，也是最貴的一次）：我拿「票價有刪除線」當完售判定，
+  // 但比對開賣當下留下的真實 HTML 後確認 —— 刪除線每一列都有，跟有沒有票毫無關係：
+  //
+  //   可訂購（優先購）：<s><font color='lightblue'>9430</font></s>
+  //                    <button class='red' onclick='VipSellCheck("P1FHHBJX");return false;'>立即訂購</button>
+  //   可訂購（一般）：  <s><font color='lightblue'>8880</font></s>
+  //                    <button class='red' onclick='doLink("UTK0201_000.aspx?PERFORMANCE_ID=…",323)'>立即訂購</button>
+  //   完售：            <s><font color='lightblue'>9430</font></s>
+  //                    <button class='gray' onclick='return false;'>已售完</button>
+  //
+  // 照刪除線判，開賣時會把每一列都當成完售，一場都不進 —— 靜悄悄地全盤失效。
+  // 按鈕是明確的：紅底帶 VipSellCheck／doLink ＝ 可訂購；灰底「已售完」＝ 完售。
 
-  // 回傳 true=完售 / false=有票 / null=看不出來
+  // 回傳 true=完售 / false=可訂購 / null=看不出來
   function rowSoldOut(row) {
+    const btns = [...row.querySelectorAll('button,a,input[type=button],input[type=submit]')];
+    // 有訂購動作 → 就是可以買
+    const live = btns.some((b) => {
+      const oc = (b.getAttribute('onclick') || '') + ' ' + (b.getAttribute('href') || '');
+      return /VipSellCheck/.test(oc) || /doLink\s*\(\s*["'][^"']*UTK020/.test(oc);
+    });
+    if (live) return false;
+    // 明說已售完
     const txt = (row.innerText || row.textContent || '');
-    if (/完售|售完|已售罄|額滿|sold\s*out/i.test(txt)) return true;
-    const win = row.ownerDocument && row.ownerDocument.defaultView;   // fetch 回來的 doc 沒有 view
-    const nodes = [row, ...row.querySelectorAll('*')];
-    let known = false;
-    for (const n of nodes) {
-      if (/^(DEL|S|STRIKE)$/.test(n.tagName)) { rememberLt(n.className); return true; }
-      if (/line-through/.test(n.getAttribute('style') || '')) { rememberLt(n.className); return true; }
-      if (win && win.getComputedStyle) {
-        const st = win.getComputedStyle(n);
-        if (/line-through/.test(st.textDecorationLine || st.textDecoration || '')) { rememberLt(n.className); return true; }
-        known = true;
-      }
-      const cls = ltClasses();
-      if (cls.length && String(n.className || '').split(/\s+/).some((c) => c && cls.includes(c))) return true;
-    }
-    if (win && known) return false;        // 活頁面上逐一看過都沒刪除線 → 確定有票
-    return ltClasses().length ? false : null;   // 沒有可比對的標記 → 看不出來
+    if (/已售完|完售|售完|額滿|sold\s*out/i.test(txt)) return true;
+    if (btns.some((b) => /\bgray\b/.test(b.className || ''))) return true;
+    return btns.length ? true : null;    // 有按鈕卻沒有任何訂購動作 → 買不到
   }
 
   // 場次頁按鈕有兩種：
@@ -595,7 +642,18 @@
       const rows = list.filter((x) => x.perf).map((x) => ({
         perf: x.perf, price: x.price, text: x.text.slice(0, 80), url: x.url || '', mode: x.mode,
       }));
-      if (rows.length) localStorage.setItem(PERFS_KEY, JSON.stringify({ at: Date.now(), rows }));
+      if (rows.length) {
+        localStorage.setItem(PERFS_KEY, JSON.stringify({ at: Date.now(), rows }));
+        // 票價 → PERFORMANCE_ID 的對照表只在「還買得到」的時候看得到：
+        // 一旦完售，網站把訂購網址從 DOM 拿掉就再也撈不回來（2026-09-17 實地確認）。
+        // 所以多存兩份：擴充功能自己的儲存空間 + 搶票紀錄（可匯出），別只靠網頁的 localStorage。
+        const sig = rows.map((r) => r.perf).join(',');
+        if (sig !== savePerfList.lastSig) {
+          savePerfList.lastSig = sig;
+          logEvent('perf_map', { product: PRODUCT_ID, rows: rows.map((r) => ({ price: r.price, perf: r.perf, url: r.url })) }, true);
+          try { chrome.storage.local.set({ ['perfmap_' + (PRODUCT_ID || 'x')]: { at: Date.now(), product: PRODUCT_ID, rows } }); } catch (e) {}
+        }
+      }
       return rows;
     } catch (e) { return []; }
   }
@@ -1351,6 +1409,7 @@
   function onSessionLost() {
     logEvent('lost', { url: location.href }, true);
     areaState.stop = true;
+    if (directTargets().length && directNext('流程失效，換下一個目標')) return;
     // 退回場次頁繼續監控全部價位（比停在死掉的票區頁有用）。最多退三次，避免來回彈。
     const backUrl = sessionStorage.getItem(PERF_URL_KEY);
     const n = toInt(sessionStorage.getItem('kham_lost_back'), 0);
@@ -1504,6 +1563,7 @@
 
         if (!hit) {
           areaState.empty = (areaState.empty || 0) + 1;
+          if (areaState.empty >= 5 && directTargets().length && directNext('這個票價沒票')) return;
           const backUrl = sessionStorage.getItem(PERF_URL_KEY);
           const peersDead = !S.crossPrice || (peerState.at && !peerState.list.some((p) => p.avail.length));
           // 連續 5 輪本場次沒票、其他票價也沒票 → 退回場次頁。
@@ -2109,6 +2169,7 @@
     try {
       chrome.storage.local.get({ won: null }).then((r) => { pauseForOtherTab(r && r.won); });
     } catch (e) {}
+    if (S.enabled && !onDirectTarget()) directLoop();
     sweep();
     // 內容是 ajax 後補的（票區表、場次列表、燈箱）→ 元素一出現就再掃一次
     try {

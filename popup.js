@@ -7,6 +7,7 @@ const DEFAULTS = {
   perfKeyword: '',
   presaleCode: '',
   autoSubmitPresale: true,
+  directUrls: '',
   priceTargets: '',
   crossPrice: true,
   targets: '',
@@ -22,7 +23,7 @@ const DEFAULTS = {
   pickMostSeats: true,
 };
 
-const ids = ['enabled', 'startAt', 'refreshMs', 'perfKeyword', 'presaleCode', 'autoSubmitPresale', 'priceTargets', 'crossPrice', 'count', 'ticketType',
+const ids = ['enabled', 'startAt', 'refreshMs', 'perfKeyword', 'presaleCode', 'autoSubmitPresale', 'directUrls', 'priceTargets', 'crossPrice', 'count', 'ticketType',
   'acceptNonAdjacent', 'allowFewer', 'captchaLen', 'autoSubmitCaptcha', 'autoCheckout',
   'pauseOthersOnWin', 'hideSoldOut', 'pickMostSeats'];
 const els = {};
@@ -49,6 +50,7 @@ chrome.storage.sync.get(DEFAULTS).then((s) => {
   els.perfKeyword.value = s.perfKeyword || '';
   els.presaleCode.value = s.presaleCode || '';
   els.autoSubmitPresale.checked = s.autoSubmitPresale !== false;
+  els.directUrls.value = s.directUrls || '';
   els.priceTargets.value = s.priceTargets || '';
   els.crossPrice.checked = s.crossPrice !== false;
   els.count.value = String(parseInt(s.count, 10) || 2);
@@ -104,6 +106,7 @@ function collect() {
     perfKeyword: els.perfKeyword.value.trim(),
     presaleCode: els.presaleCode.value.trim(),
     autoSubmitPresale: els.autoSubmitPresale.checked,
+    directUrls: els.directUrls.value.trim(),
     priceTargets: els.priceTargets.value.trim(),
     crossPrice: els.crossPrice.checked,
     targets: '',            // 已移除此設定：票區頁改成「有票就點」
