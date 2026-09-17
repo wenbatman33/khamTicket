@@ -114,6 +114,13 @@
     if (d.cmd === 'ADD_CART' && typeof window.addShoppingCart === 'function') {
       try { window.addShoppingCart(); } catch (e) { /* 由網站自行處理 */ }
     }
+    // 優先購送出：畫面上的鈕點不到時，直接呼叫網站自己的送出函式
+    if (d.cmd === 'VIP_SUBMIT') {
+      try {
+        if (typeof window.DoVIPLogin === 'function') { window.DoVIPLogin(); post('CMD', { cmd: 'VIP_SUBMIT', ok: true }); }
+        else post('CMD', { cmd: 'VIP_SUBMIT', ok: false });
+      } catch (e) { post('CMD', { cmd: 'VIP_SUBMIT', ok: false, err: String(e && e.message || e) }); }
+    }
     if (d.cmd === 'RESET_CLICK') {
       // 網站用 isClick 當送出中旗標；失敗後偶爾沒還原會卡住，這裡只還原旗標
       try { if (typeof window.isClick !== 'undefined') window.isClick = false; } catch (e) {}

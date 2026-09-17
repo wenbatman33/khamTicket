@@ -69,6 +69,7 @@
       <label for="enabled">自動搶票</label>
     </div>
     <div class="master-state" id="masterState"></div>
+    <div class="hint" style="margin-top:6px">網頁上的面板標題列也有同一顆開關，搶票當下可以就地開關，不必回來這裡。</div>
   </div>
 
   <div class="field">
@@ -86,7 +87,12 @@
   <div class="field">
     <label for="presaleCode">優先購序號／認證碼</label>
     <input type="text" id="presaleCode" placeholder="預購序號、中信卡號前幾碼…（一般販售留空）">
-    <div class="hint">優先購期間場次頁會跳燈箱要序號，工具會照原樣填入並送出，<b>不做任何裁切</b>（序號一經使用即失效，請留意全半形與大小寫）。燈箱若還有第二欄（密碼類），會停下來讓你自己填。</div>
+    <div class="hint">不管在哪一頁、是燈箱還是整頁，<b>只要畫面上出現序號欄位就自動填入</b>，照原樣填、<b>不做任何裁切</b>（序號一經使用即失效，請留意全半形與大小寫）。主開關開著才會自動按送出。若還有第二個欄位（密碼類），會停下來讓你自己填。<b>驗證碼欄位永遠不會被碰到。</b></div>
+    <div class="check" style="margin-top:8px">
+      <input type="checkbox" id="autoSubmitPresale">
+      <label for="autoSubmitPresale">填好就自動按「送出」</label>
+    </div>
+    <div class="hint" style="margin:-4px 0 0 24px">跟主開關無關，手動模式也會送。連續送出 3 次沒過就停手，交還給你（序號是一次性的，不能無限試）。</div>
   </div>
 
   <div class="field">
@@ -97,11 +103,19 @@
 
   <div class="section">
     <div class="section-title">搶什麼票</div>
-    <div class="section-note">由上往下試，搶到就停。比對不分大小寫、忽略空白，可只填一部分（填「VIP」會對到所有含 VIP 的票區）。</div>
+    <div class="section-note">由上往下試，搶到就停。比對不分大小寫、忽略空白，可只填一部分（填「VIP」會對到所有含 VIP 的票區）。<b>填純數字＝當票價比</b>（填 <code>9430</code> 只會對到 9430 元，不會被 943 或 94300 對到）。</div>
     <div class="field">
-      <label for="targets">票區優先順序（一行一個）</label>
-      <textarea id="targets" placeholder="VIP區2999元&#10;B區1999元"></textarea>
+      <label for="priceTargets">票價優先順序（一行一個）</label>
+      <textarea id="priceTargets" style="height:86px" placeholder="9430&#10;8880&#10;6980"></textarea>
+      <div class="hint">BIGBANG 這種「同一場次依票價拆成十幾列」的活動，<b>要買哪個價位是在場次頁決定的</b>，這裡填票價就好。
+      設了卻一個都對不到時<b>會停手不亂點</b>，不會買到你沒要的價位。留空＝不挑價位。</div>
     </div>
+    <div class="check">
+      <input type="checkbox" id="crossPrice">
+      <label for="crossPrice">背景監控其他票價，有票就跳過去</label>
+    </div>
+    <div class="hint" style="margin:-4px 0 10px 24px">站在某個價位的票區頁時，同時輪詢其他價位的場次；面板會列出每個價位還有幾區有票。只會往「更想要的價位」跳。</div>
+    <div class="hint" style="margin:0 0 10px">進到票區頁後：<b>哪一區有票就點哪一區</b>（同價位多區時取空位最多的）。不再需要填票區名稱。</div>
     <div class="field inline">
       <label for="count">每次買幾張</label>
       <input type="number" id="count" min="1" max="8">

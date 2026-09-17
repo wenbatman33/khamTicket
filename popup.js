@@ -6,6 +6,9 @@ const DEFAULTS = {
   refreshMs: 800,
   perfKeyword: '',
   presaleCode: '',
+  autoSubmitPresale: true,
+  priceTargets: '',
+  crossPrice: true,
   targets: '',
   count: 2,
   ticketType: '',
@@ -19,7 +22,7 @@ const DEFAULTS = {
   pickMostSeats: true,
 };
 
-const ids = ['enabled', 'startAt', 'refreshMs', 'perfKeyword', 'presaleCode', 'targets', 'count', 'ticketType',
+const ids = ['enabled', 'startAt', 'refreshMs', 'perfKeyword', 'presaleCode', 'autoSubmitPresale', 'priceTargets', 'crossPrice', 'count', 'ticketType',
   'acceptNonAdjacent', 'allowFewer', 'captchaLen', 'autoSubmitCaptcha', 'autoCheckout',
   'pauseOthersOnWin', 'hideSoldOut', 'pickMostSeats'];
 const els = {};
@@ -45,7 +48,9 @@ chrome.storage.sync.get(DEFAULTS).then((s) => {
   els.refreshMs.value = String(parseInt(s.refreshMs, 10) || 800);
   els.perfKeyword.value = s.perfKeyword || '';
   els.presaleCode.value = s.presaleCode || '';
-  els.targets.value = s.targets || '';
+  els.autoSubmitPresale.checked = s.autoSubmitPresale !== false;
+  els.priceTargets.value = s.priceTargets || '';
+  els.crossPrice.checked = s.crossPrice !== false;
   els.count.value = String(parseInt(s.count, 10) || 2);
   els.ticketType.value = s.ticketType || '';
   els.acceptNonAdjacent.checked = !!s.acceptNonAdjacent;
@@ -57,6 +62,8 @@ chrome.storage.sync.get(DEFAULTS).then((s) => {
   els.hideSoldOut.checked = !!s.hideSoldOut;
   els.pickMostSeats.checked = !!s.pickMostSeats;
   renderMaster();
+  // 舊版存過的「票區優先順序」要清掉：留著會繼續過濾票區，害有票的區被跳過
+  if (s.targets) chrome.storage.sync.set({ targets: '' });
 });
 
 // 有分頁搶到時顯示狀態與解除按鈕（10 分鐘後視同過期）
@@ -96,7 +103,10 @@ function collect() {
     refreshMs: n(els.refreshMs, 800),
     perfKeyword: els.perfKeyword.value.trim(),
     presaleCode: els.presaleCode.value.trim(),
-    targets: els.targets.value.trim(),
+    autoSubmitPresale: els.autoSubmitPresale.checked,
+    priceTargets: els.priceTargets.value.trim(),
+    crossPrice: els.crossPrice.checked,
+    targets: '',            // 已移除此設定：票區頁改成「有票就點」
     count: Math.max(1, n(els.count, 2)),
     ticketType: els.ticketType.value.trim(),
     acceptNonAdjacent: els.acceptNonAdjacent.checked,
@@ -118,9 +128,9 @@ function flash(msg) {
 els.save.addEventListener('click', async () => {
   const data = collect();
   await chrome.storage.sync.set(data);
-  const c = data.targets.split('\n').map((s) => s.trim()).filter(Boolean).length;
-  flash(c ? '✅ 已儲存（' + c + ' 個票區，每次 ' + data.count + ' 張，間隔 ' + data.refreshMs + 'ms）'
-          : '⚠️ 已儲存，但還沒填票區優先順序');
+  const c = data.priceTargets.split('\n').map((s) => s.trim()).filter(Boolean).length;
+  flash(c ? '✅ 已儲存（' + c + ' 個票價，每次 ' + data.count + ' 張，間隔 ' + data.refreshMs + 'ms）'
+          : '✅ 已儲存（不挑票價：哪個價位有票就搶哪個）');
 });
 
 els.run.addEventListener('click', async () => {

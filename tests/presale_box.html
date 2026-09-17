@@ -1,0 +1,63 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>優先購燈箱測試</title>
+<style>
+ body{font-family:"PingFang TC",sans-serif;margin:0}
+ .popoutBG{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center}
+ .popout{background:#fff;width:640px;padding:40px 60px}
+ .eventTitle{text-align:center;font-size:26px;font-weight:700;color:#444;letter-spacing:4px}
+ hr{border:0;border-top:1px dotted #bbb;margin:24px 0}
+ .ask{font-size:20px;margin:30px 0 14px}
+ .box{background:#f5f5f5;padding:18px;text-align:center}
+ .req{color:#e00}
+ .btn{display:block;width:100%;background:#e60012;color:#fff;border:0;padding:16px;font-size:20px;font-weight:700;margin-top:26px;cursor:pointer}
+ table{width:100%;border-collapse:collapse}td{padding:10px;border-bottom:1px solid #eee}
+ .through{text-decoration:line-through;color:#8aa}
+ .order{background:#e60012;color:#fff;border:0;padding:8px 18px}
+</style></head><body>
+<!-- 背景：場次頁，三列票價，8880 沒有刪除線＝有票 -->
+<table id="perfTable">
+ <tr><td>2027/02/27(六)18:30</td><td>【9430元票價】BIGBANG IN KAOHSIUNG</td><td><span class="through">9430</span></td>
+     <td><button class="order" onclick="doLink('UTK0201_000.aspx?PERFORMANCE_ID=A1',3704)">立即訂購</button></td></tr>
+ <tr><td>2027/02/27(六)18:30</td><td>【8880元票價】BIGBANG IN KAOHSIUNG</td><td><span>8880</span></td>
+     <td><button class="order" onclick="doLink('UTK0201_000.aspx?PERFORMANCE_ID=A2',3704)">立即訂購</button></td></tr>
+ <tr><td>2027/02/27(六)18:30</td><td>【6980元票價】BIGBANG IN KAOHSIUNG</td><td><span class="through">6980</span></td>
+     <td><button class="order" onclick="doLink('UTK0201_000.aspx?PERFORMANCE_ID=A3',3704)">立即訂購</button></td></tr>
+</table>
+
+<!-- 前景：優先購燈箱。結構刻意「送出鈕在灰色欄位方塊外面」、文字帶全形空白 -->
+<div class="popoutBG" id="box">
+ <div class="popout">
+  <div class="eventTitle">／　優先購買　／</div><hr>
+  <div class="ask">請輸入【BIGBANG V.I.P MEMBERSHIP PRESALE】</div>
+  <div class="box"><span class="req">＊</span>Presale Code：<br><input type="text" id="PRESALE_CODE" maxlength="20"></div>
+  <button class="btn" onclick="DoVIPLogin()">送　出</button>
+ </div>
+</div>
+<script>
+ window.__result = { clicked:false, value:'' };
+ function DoVIPLogin(){ window.__result.clicked = true; window.__result.value = document.getElementById('PRESALE_CODE').value; }
+ function doLink(u){ window.__result.link = u; }
+ // chrome API stub
+ const store = { presaleCode:'Q69HZU', enabled:false, autoSubmitPresale:true };
+ window.chrome = {
+   storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
+             local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() },
+             onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} },
+ };
+</script>
+<script src="../content.js"></script>
+</body></html>
+<div id="RESULT">running…</div>
+<script>
+setTimeout(() => {
+  const inp = document.getElementById('PRESALE_CODE');
+  const r = window.__result;
+  const lines = [
+    'FILLED=' + (inp.value === 'Q69HZU' ? 'PASS' : 'FAIL(' + JSON.stringify(inp.value) + ')'),
+    'SUBMITTED=' + (r.clicked ? 'PASS' : 'FAIL'),
+    'SUBMIT_VALUE=' + (r.value === 'Q69HZU' ? 'PASS' : 'FAIL(' + JSON.stringify(r.value) + ')'),
+    'NO_ORDER_CLICK_WHILE_DIALOG=' + (r.link ? 'FAIL(' + r.link + ')' : 'PASS'),
+  ];
+  document.getElementById('RESULT').textContent = lines.join(' | ');
+}, 2500);
+</script>
