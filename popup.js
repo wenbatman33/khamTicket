@@ -5,13 +5,9 @@ const DEFAULTS = {
   presaleCode: '',
   autoSubmitPresale: true,
   count: 2,
-  acceptNonAdjacent: true,
-  allowFewer: false,
-  autoSubmitCaptcha: true,
 };
 
-const ids = ['enabled', 'presaleCode', 'autoSubmitPresale', 'count',
-  'acceptNonAdjacent', 'allowFewer', 'autoSubmitCaptcha'];
+const ids = ['enabled', 'presaleCode', 'autoSubmitPresale', 'count'];
 const els = {};
 ids.concat(['masterBox', 'masterState', 'save', 'run', 'status']).forEach((k) => {
   els[k] = document.getElementById(k);
@@ -21,19 +17,16 @@ function renderMaster() {
   const on = els.enabled.checked;
   els.masterBox.classList.toggle('on', on);
   els.masterState.textContent = on
-    ? '序號填好會自動送出；驗證碼輸滿會自動按「加入購物車」。填寫一律照做。'
-    : '只填不送：序號、張數照樣填好，送出的動作交給你自己按。';
+    ? '看到訊息視窗、序號欄位、張數欄位、驗證碼就會幫你處理。'
+    : '完全停止：什麼都不做，全部由你自己操作。';
 }
 
 chrome.storage.sync.get(DEFAULTS).then((s) => {
   els.enabled.checked = s.enabled !== false;
+  renderMaster();
   els.presaleCode.value = s.presaleCode || '';
   els.autoSubmitPresale.checked = s.autoSubmitPresale !== false;
   els.count.value = String(parseInt(s.count, 10) || 2);
-  els.acceptNonAdjacent.checked = !!s.acceptNonAdjacent;
-  els.allowFewer.checked = !!s.allowFewer;
-  els.autoSubmitCaptcha.checked = s.autoSubmitCaptcha !== false;
-  renderMaster();
 });
 
 function collect() {
@@ -43,9 +36,6 @@ function collect() {
     presaleCode: els.presaleCode.value.trim(),
     autoSubmitPresale: els.autoSubmitPresale.checked,
     count: Math.max(1, n(els.count, 2)),
-    acceptNonAdjacent: els.acceptNonAdjacent.checked,
-    allowFewer: els.allowFewer.checked,
-    autoSubmitCaptcha: els.autoSubmitCaptcha.checked,
   };
 }
 
@@ -54,11 +44,10 @@ function flash(msg) {
   setTimeout(() => { els.status.textContent = ''; }, 2500);
 }
 
-// 主開關立刻存檔：搶票當下要能馬上停手，不必再按儲存
 els.enabled.addEventListener('change', async () => {
   renderMaster();
   await chrome.storage.sync.set(collect());
-  flash(els.enabled.checked ? '✅ 自動送出已開啟' : '⏸ 只填不送');
+  flash(els.enabled.checked ? '✅ 已啟用' : '⏸ 已全部停止');
 });
 
 els.save.addEventListener('click', async () => {

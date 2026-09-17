@@ -19,6 +19,7 @@ run presale_wrapper  # 送出鈕被空殼 div 包住時，要點到裡面真正�
 run presale_reopen   # 燈箱關掉再開（同一個 input 被清空）→ 要再填一次並再送出
 run qty_fill         # 主開關關著也要填張數，但不可以送出
 run captcha_ime      # 忘了切輸入法：全形轉半形、中文濾掉、正常英數不動
+run master_off       # 總開關關掉：完全不動作（不關視窗、不填、不送）
 run no_navigation    # 同一頁有訂購鈕與票區表時：只填該填的，絕不點、絕不換頁
 echo "---"
 [ $fail = 0 ] && echo "全部通過" || echo "有失敗項目"

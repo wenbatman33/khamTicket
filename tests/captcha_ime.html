@@ -5,7 +5,7 @@
 <input name="CHK" type="text" maxlength="4" id="CHK" />
 <script>
  window.__result = {};
- const store = { enabled:false, autoSubmitCaptcha:false, count:2, presaleCode:'' };
+ const store = { enabled:true, autoSubmitCaptcha:false, count:2, presaleCode:'' };
  window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
    local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
    runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };

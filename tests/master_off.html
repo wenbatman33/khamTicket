@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>總開關關掉：什麼都不做</title></head><body>
+<div class="ui-dialog" id="d1"><div id="dialog-message">本節目採「個人實名制入場」，請於購票前確認資料。</div>
+  <div class="ui-dialog-buttonpane"><button onclick="window.__result.ok=true">Ok</button></div></div>
+<div class="popoutBG"><div class="popout"><div>優先購買</div>
+  <div>＊Presale Code：<input type="text" id="PRESALE_CODE"></div>
+  <button onclick="window.__result.sent=true">送出</button></div></div>
+<input type="hidden" id="QUANTITY_LIMIT" value="4" />
+<input type="hidden" ID="T1" KEY="TYPE_ID" Value="T1" />
+<input class="numbox" type="number" id="AMOUNT" KEY='T1' value="0" />
+<input name="CHK" type="text" maxlength="4" id="CHK" />
+<script>
+ window.__result = {};
+ // 總開關關閉 → 工具必須完全不動作
+ const store = { enabled:false, presaleCode:'Q69HZU', autoSubmitPresale:true, count:2 };
+ window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
+   local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };
+ window.fetch = () => Promise.reject(new Error('offline test'));
+</script>
+<script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+setTimeout(() => {
+  const r = window.__result;
+  document.getElementById('RESULT').textContent =
+    'NO_NOTICE_CLICK=' + (r.ok ? 'FAIL' : 'PASS') +
+    ' | NO_PRESALE_FILL=' + (document.getElementById('PRESALE_CODE').value === '' ? 'PASS' : 'FAIL') +
+    ' | NO_SUBMIT=' + (r.sent ? 'FAIL' : 'PASS') +
+    ' | NO_QTY_FILL=' + (document.querySelector("input[KEY='T1']").value === '0' ? 'PASS' : 'FAIL');
+}, 2500);
+</script>
+</body></html>

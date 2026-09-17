@@ -3,107 +3,62 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  body { width: 330px; font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  body { width: 300px; font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
          font-size: 14px; margin: 0; padding: 14px; background: #fafafa; color: #333; }
-  h1 { font-size: 16px; margin: 0 0 4px; }
-  .sub { font-size: 12px; color: #888; margin-bottom: 12px; line-height: 1.5; }
-  .field { margin-bottom: 12px; }
-  label { display: block; font-weight: 600; margin-bottom: 4px; }
-  .hint { font-size: 12px; color: #888; margin-top: 3px; line-height: 1.5; }
-  input[type="text"] { width: 100%; box-sizing: border-box; padding: 6px 8px;
+  h1 { font-size: 16px; margin: 0 0 12px; }
+  .field { margin-bottom: 14px; }
+  label { display: block; font-weight: 600; margin-bottom: 5px; }
+  input[type="text"] { width: 100%; box-sizing: border-box; padding: 7px 8px;
     border: 1px solid #ccc; border-radius: 6px; font-size: 14px; font-family: inherit; }
-  .field.inline { display: flex; align-items: center; gap: 8px; }
+  .field.inline { display: flex; align-items: center; gap: 10px; }
   .field.inline label { margin: 0; white-space: nowrap; }
-  .field.inline input[type="number"] { width: 70px; text-align: center; padding: 6px 4px;
+  .field.inline input[type="number"] { width: 70px; text-align: center; padding: 7px 4px;
     border: 1px solid #ccc; border-radius: 6px; font-size: 14px; font-family: inherit; }
-  .check { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .check { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
   .check input { width: 16px; height: 16px; margin: 0; }
   .check label { font-weight: 500; margin: 0; }
-  .master { border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
-    border: 2px solid #ccc; background: #f0f0f0; transition: background .15s, border-color .15s; }
+  .master { border-radius: 8px; padding: 10px 12px; margin-bottom: 14px;
+    border: 2px solid #ccc; background: #f0f0f0; }
   .master.on { border-color: #c8102e; background: #fdecef; }
   .master-row { display: flex; align-items: center; gap: 10px; }
   .master-row input { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; }
   .master-row label { font-size: 15px; font-weight: 700; margin: 0; }
   .master-state { font-size: 12px; color: #666; margin-top: 6px; line-height: 1.5; }
-  .does { border: 1px solid #d7e3ea; background: #f2f9fc; border-radius: 8px;
-    padding: 10px 12px; margin-bottom: 12px; font-size: 12px; line-height: 1.8; }
-  .does b { color: #1a6a8a; }
-  .section { border: 1px solid #e6dde0; background: #fdf7f8; border-radius: 8px;
-    padding: 10px 10px 4px; margin-bottom: 12px; }
-  .section-title { font-weight: 700; margin-bottom: 8px; }
-  .adv { margin-bottom: 12px; }
-  .adv summary { cursor: pointer; font-size: 13px; color: #c8102e; font-weight: 600; }
-  .warn { font-size: 12px; line-height: 1.6; color: #7a4a00; background: #fff6e5;
-    border: 1px solid #ffd699; border-radius: 6px; padding: 8px 10px; margin-bottom: 12px; }
   button { width: 100%; padding: 9px; border: 0; border-radius: 6px;
     font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 6px; }
   #save { background: #c8102e; color: #fff; }
-  .mini { flex:1; padding:7px 4px; font-size:12px; background:#c8102e; color:#fff; margin-bottom:0; }
   #run { background: #eee; color: #333; }
   #status { font-size: 12px; color: #2e7d32; min-height: 18px; text-align: center; }
 </style>
 </head>
 <body>
   <h1>🎫 寬宏填寫輔助</h1>
-  <div class="sub">kham.com.tw ｜ 看到元素就幫你填／幫你點，其餘都由你自己決定</div>
-
-  <div class="does">
-    <b>它只做四件事</b><br>
-    1. 訊息視窗 → 自動按「Ok」（錯誤訊息會留給你看）<br>
-    2. 優先購序號 → 自動填入並送出<br>
-    3. 張數欄位 → 自動填入<br>
-    4. 驗證碼 → 放大並把游標放進去（<b>絕不碰圖、不代填</b>）<br>
-    <span style="color:#888">場次、票區、換頁、結帳：<b>全部由你自己點</b>。</span>
-  </div>
 
   <div class="master" id="masterBox">
     <div class="master-row">
       <input type="checkbox" id="enabled">
-      <label for="enabled">自動送出</label>
+      <label for="enabled">啟用</label>
     </div>
     <div class="master-state" id="masterState"></div>
   </div>
 
-  <div class="section">
-    <div class="section-title">優先購序號</div>
-    <div class="field">
-      <input type="text" id="presaleCode" placeholder="預購序號（一般販售留空）">
-      <div class="hint">不管在哪一頁、燈箱還是整頁，<b>只要出現序號欄位就自動填入</b>，照原樣填、<b>不裁切</b>。
-      欄位被清空又出現會再填一次。<b>驗證碼欄位永遠不會被碰到。</b></div>
-    </div>
-    <div class="check">
-      <input type="checkbox" id="autoSubmitPresale">
-      <label for="autoSubmitPresale">填好就自動按「送出」</label>
-    </div>
-    <div class="hint" style="margin:-4px 0 8px 24px">連續送出 3 次沒過就停手交還給你（序號是一次性的，不能無限試）。</div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">張數</div>
-    <div class="field inline">
-      <label for="count">每次填幾張</label>
-      <input type="number" id="count" min="1" max="8">
-    </div>
-    <div class="check">
-      <input type="checkbox" id="allowFewer">
-      <label for="allowFewer">剩餘不足時改填剩下的</label>
-    </div>
-    <div class="check">
-      <input type="checkbox" id="acceptNonAdjacent">
-      <label for="acceptNonAdjacent">自動勾「接受不連位座位」</label>
-    </div>
-    <div class="hint" style="margin:0 0 8px">站席頁的票區下拉<b>由你自己選</b>，選好之後我才幫你填張數。</div>
+  <div class="field">
+    <label for="presaleCode">優先購序號</label>
+    <input type="text" id="presaleCode" placeholder="一般販售留空">
   </div>
 
   <div class="check">
-    <input type="checkbox" id="autoSubmitCaptcha">
-    <label for="autoSubmitCaptcha">驗證碼輸滿自動按「加入購物車」</label>
+    <input type="checkbox" id="autoSubmitPresale">
+    <label for="autoSubmitPresale">填好就自動按「送出」</label>
   </div>
-  <div class="hint" style="margin:-4px 0 12px 24px">需要上面的「自動送出」也開著。位數以頁面的 maxlength 為準。</div>
 
-  <button id="save">💾 儲存設定</button>
-  <button id="run">▶ 在目前分頁立即填一次</button>
+  <div class="field inline">
+    <label for="count">每次填幾張</label>
+    <input type="number" id="count" min="1" max="8">
+  </div>
+
+  <button id="save">💾 儲存</button>
+  <button id="run">▶ 在目前分頁填一次</button>
   <div id="status"></div>
 
   <script src="popup.js"></script>

@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>張數頁：主開關關著也要填</title></head><body>
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>張數頁：票區自己選、選完才填</title></head><body>
 <!-- 欄位寫法照 UTK0202_ 的真實快照原樣複製（KEY 用雙引號、金額框 id="AMOUNT" KEY='<票種ID>'） -->
 <input type="hidden" id="PERFORMANCE_PRICE_AREA_ID" value="P1F7MX8Z" />
 <input type="hidden" id="QUANTITY_LIMIT" value="4" />
@@ -11,8 +11,8 @@
 <input name="CHK" type="text" maxlength="4" id="CHK" placeholder="驗證碼 不分大小寫" />
 <script>
  window.__result = {};
- // 主開關「關著」：填寫仍然要做，送出才不做
- const store = { enabled:false, autoSubmitCaptcha:true, count:2, startAt:'', refreshMs:300,
+ // 票區由使用者自己選；工具不會按加入購物車
+ const store = { enabled:true, autoSubmitCaptcha:true, count:2, startAt:'', refreshMs:300,
                  presaleCode:'', directUrls:'', priceTargets:'', targets:'', crossPrice:false };
  window.chrome = {
    storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },

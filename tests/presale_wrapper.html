@@ -37,7 +37,7 @@
  function DoVIPLogin(){ window.__result.clicked = true; window.__result.value = document.getElementById('PRESALE_CODE').value; }
  function doLink(u){ window.__result.link = u; }
  // chrome API stub
- const store = { presaleCode:'Q69HZU', enabled:false, autoSubmitPresale:true };
+ const store = { presaleCode:'Q69HZU', enabled:true, autoSubmitPresale:true };
  window.chrome = {
    storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
              local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() },

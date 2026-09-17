@@ -16,7 +16,7 @@
 </div>
 <script>
  window.__result = {};
- const store = { enabled:false, presaleCode:'', directUrls:'', priceTargets:'', targets:'', crossPrice:false, count:2 };
+ const store = { enabled:true, presaleCode:'', directUrls:'', priceTargets:'', targets:'', crossPrice:false, count:2 };
  window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
    local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
    runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };

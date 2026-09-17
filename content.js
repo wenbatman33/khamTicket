@@ -17,19 +17,16 @@
   if (window.__khamHelperLoaded) return;
   window.__khamHelperLoaded = true;
 
-  const VER = '2.0.0';
+  const VER = '2.1.0';
 
   // ---------------------------------------------------------------- 設定
   // 這個工具只做一件事：**看到元素就幫你填／幫你點**。
   // 它不挑場次、不挑票區、不自己換頁、不輪詢庫存 —— 那些都由你自己決定。
   const DEFAULTS = {
-    enabled: true,           // 只管「會送出去的動作」：序號送出、加入購物車。填寫一律照做
+    enabled: true,           // 總開關：關掉之後這個工具什麼都不做
     presaleCode: '',         // 優先購序號：看到欄位就照原樣填入，不裁切
     autoSubmitPresale: true, // 序號填好自動按送出
     count: 2,                // 張數欄位要填幾張
-    acceptNonAdjacent: true, // 自動勾「接受不連位座位」
-    allowFewer: false,       // 剩餘不足需求張數時，是否改填剩下的
-    autoSubmitCaptcha: true, // 驗證碼輸滿自動按「加入購物車」
   };
   let S = Object.assign({}, DEFAULTS);
 
@@ -93,11 +90,11 @@
   // 面板上的開關長相跟著狀態走：紅＝自動搶票中、灰＝已關閉
   function renderToggle() {
     if (!toggleBtn) return;
-    const on = !!S.enabled;
-    toggleBtn.textContent = on ? '⏸ 自動送出：開' : '▶ 自動送出：關';
+    const on = S.enabled !== false;
+    toggleBtn.textContent = on ? '⏸ 停止全部' : '▶ 已停止（點此啟用）';
     toggleBtn.style.background = on ? '#fff' : '#3a3f4a';
     toggleBtn.style.color = on ? '#c8102e' : '#fff';
-    toggleBtn.title = on ? '點一下改成不自動送出（填寫照樣會做）' : '點一下開啟自動送出';
+    toggleBtn.title = on ? '點一下完全停止（什麼都不做）' : '點一下重新啟用';
   }
 
   function ensurePanel() {
@@ -130,12 +127,12 @@
     toggleBtn.addEventListener('mousedown', (e) => e.stopPropagation());
     toggleBtn.addEventListener('click', (e) => {
       e.stopPropagation(); e.preventDefault();
-      const next = !S.enabled;
+      const next = S.enabled === false;
       S.enabled = next;                       // 先就地生效，不等 storage 回來
       renderToggle();
-      logEvent('toggle', { enabled: next, by: 'panel' }, true);
-      toast(next ? '▶ 自動送出：開' : '⏸ 自動送出：關（填寫照做，送出交給你）');
+      toast(next ? '▶ 已啟用：看到欄位會幫你填' : '⏸ 已全部停止：完全不動作');
       try { chrome.storage.sync.set({ enabled: next }); } catch (err) {}
+      if (next) sweep();
     });
 
     bar.appendChild(title); bar.appendChild(toggleBtn);
@@ -243,6 +240,7 @@
     if (watchNotice.on) return;
     watchNotice.on = true;
     const check = () => {
+      if (S.enabled === false) return;        // 總開關關著：什麼都不做
       try {
         const hit = noticeDialog();
         if (hit) {
@@ -544,6 +542,7 @@
     if (presaleState.watching) return;
     presaleState.watching = true;
     const tick = () => {
+      if (S.enabled === false) return;        // 總開關關著：什麼都不做
       try {
         const el = findPresaleField();
         if (!el) return;
@@ -621,20 +620,17 @@
     const limit = toInt(hid('QUANTITY_LIMIT'), 0) || 8;
     const last = standing ? standing.last : toInt(hid('LAST_AMOUNT'), 0);
     const need = Math.max(1, toInt(S.count, 1));
+    // 填得下就填你要的張數；剩餘或限購比較少就填那個數字（不足也先填好，要不要買由你決定）
     let want = Math.min(need, limit);
-    if (last > 0 && want > last) {
-      if (!S.allowFewer) return { ok: false, msg: '剩餘 ' + last + ' 張，不足 ' + need + ' 張', few: true };
-      want = last;
-    }
+    if (last > 0 && want > last) want = last;
 
     const target = pickType(list);
     list.forEach((t) => { t.box.value = (t === target ? String(want) : '0'); });
 
-    const atype = document.getElementById('ATYPE');
-    if (atype && S.acceptNonAdjacent && !atype.checked) atype.click();
+    // 「接受不連位座位」網站預設沒勾，就維持沒勾 —— 那是你的決定，不是我的。
 
     const where = standing ? standing.name + '：' : '';
-    return { ok: true, msg: '已填 ' + where + target.name + ' × ' + want + ' 張' + (atype && atype.checked ? '（接受不連位）' : ''), want, type: target.name };
+    return { ok: true, msg: '已填 ' + where + target.name + ' × ' + want + ' 張', want, type: target.name };
   }
 
   // 驗證碼：放大原圖並聚焦輸入框，由使用者輸入；不做辨識
@@ -667,9 +663,7 @@
       chk.addEventListener('input', () => {
         if (chk.disabled) return;                       // 元件正在換圖，這時的值是半截的
         if (document.querySelector('.captcha-mask.is-visible')) return;   // 新元件的載入遮罩還在
-        if (!normalizeCaptcha(chk)) return;             // 還有沒轉成的字（注音組字中）就先等
-        const len = captchaLen(chk);
-        if (S.enabled && S.autoSubmitCaptcha && chk.value.trim().length >= len) submitCart('驗證碼輸入完成');
+        normalizeCaptcha(chk);   // 只把全形轉半形、濾掉中文，不做任何送出
       });
       // 中文輸入法組字期間不要動它的值，否則會把你正在打的字打斷
       chk.addEventListener('compositionstart', () => { chk.__khamComposing = true; });
@@ -677,7 +671,6 @@
         chk.__khamComposing = false;
         normalizeCaptcha(chk);
       });
-      chk.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitCart('Enter 送出'); } });
     }
     return true;
   }
@@ -750,34 +743,6 @@
     setTimeout(ready, 120);
   }
 
-  function submitCart(reason) {
-    if (qtyState.submitted) return;
-    if (loggedOut()) { toast('⚠️ 尚未登入，請先登入會員後再送出（本工具不代填帳密）'); return; }
-    const chk = document.getElementById('CHK');
-    if (chk && !chk.value.trim()) { toast('⚠️ 請先輸入驗證碼'); return; }
-    qtyState.submitted = true;
-    logEvent('submit', {
-      reason,
-      area: hid('AREA_NAME'),
-      perf: PERF_ID,
-      amounts: [...document.querySelectorAll("input[KEY='TYPE_ID']")].map((i) => ({
-        type: i.value,
-        name: (document.getElementById(i.value + '_NAME') || {}).value || '',
-        n: (document.querySelector("input[KEY='" + i.value + "']") || {}).value || '0',
-      })),
-      atype: !!(document.getElementById('ATYPE') || {}).checked,
-      captchaLen: ((document.getElementById('CHK') || {}).value || '').length,
-    }, true);
-    toast('送出：加入購物車（' + reason + '）');
-    // 呼叫網站原有的 addShoppingCart()；先試按鈕，退而求其次請 inject 代呼叫
-    const btn = [...document.querySelectorAll('button,input[type=submit]')]
-      .find((b) => /addShoppingCart/.test(b.getAttribute('onclick') || ''));
-    if (btn) btn.click();
-    else window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'ADD_CART' }, location.origin);
-    // 送出後 5 秒沒有結果就解鎖，允許再試
-    setTimeout(() => { qtyState.submitted = false; }, 5000);
-  }
-
   function renderQtyPanel(extra) {
     const sel = document.getElementById('PRICE');
     const selOpt = sel && sel.selectedOptions && sel.selectedOptions[0];
@@ -786,14 +751,12 @@
       ? (selOpt && selOpt.value.indexOf('|') >= 0 ? selOpt.value.split('|')[1] : '—')
       : (hid('LAST_AMOUNT') || '—');
     const lines = [
-      (S.enabled ? '● 自動送出：開' : '○ 自動送出：關') + '｜' + (IS_STANDING() ? '站席購票頁' : '張數頁（電腦配位）'),
+      (IS_STANDING() ? '● 站席購票頁' : '● 張數頁（電腦配位）'),
       '票區：' + areaName + '｜剩餘 ' + lastAmt + '｜限購 ' + (hid('QUANTITY_LIMIT') || '—'),
     ];
     if (loggedOut()) lines.push('⚠️ 尚未登入：請先登入，本工具不代填帳密');
     else lines.push('✔ 已登入');
-    lines.push(S.autoSubmitCaptcha
-      ? '驗證碼輸滿 ' + captchaLen(document.getElementById('CHK')) + ' 碼即自動送出'
-      : '請自行按「加入購物車」');
+    lines.push('驗證碼打完請自己按「加入購物車」');
     if (extra) lines.push(extra);
     showPanel(lines);
   }
@@ -815,7 +778,7 @@
     }, true);
     setupCaptcha();
     renderQtyPanel('✔ ' + r.msg);
-    toast('✔ ' + r.msg + '\n請輸入驗證碼' + (S.autoSubmitCaptcha ? '（輸滿自動送出）' : ''));
+    toast('✔ ' + r.msg + '\n請輸入驗證碼，打完自己按「加入購物車」');
   }
 
   // ================================================================ 網站訊息處理
@@ -925,6 +888,8 @@
   }
 
   function sweep() {
+    if (S.enabled === false) return;          // 總開關關著：什麼都不做
+
     // 1. 訊息視窗 → 由 watchNotice() 常駐按 Ok
     // 2. 優先購序號 → 由 watchPresaleField() 常駐填入並送出
     // 這兩件事都是常駐監看，不佔規則位置。
@@ -975,7 +940,8 @@
     // 這一頁沒有要自動做的事時也把面板叫出來：開關要隨時按得到
     setTimeout(() => {
       if (!panelBody || !panelBody.textContent) {
-        showPanel(['● 待命中', '這一頁沒有要幫你填的東西。',
+        showPanel([S.enabled === false ? '⏸ 已全部停止' : '● 待命中',
+          S.enabled === false ? '工具完全不動作。點標題列的按鈕可重新啟用。' : '這一頁沒有要幫你填的東西。',
           '我只做四件事：關訊息視窗、填優先購序號並送出、填張數、放大驗證碼。',
           '場次與票區由你自己選。']);
       }
