@@ -1,0 +1,27 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>原生 alert 要接掉；監票撲空要繼續監</title></head><body>
+<div id="AREA_DIV"><table id="salesTable">
+  <tr class="status_tr" id="3001" onclick="setTimeout(()=>alert('該票區已售完！'),50)"><td>■</td><td>1樓C02區8380元</td><td>8,380</td><td id="L1">5</td></tr>
+</table></div>
+<div class="btn-update" onclick="window.__clicks=(window.__clicks||0)+1; if(window.__clicks===2){document.getElementById('L1').textContent='已售完';}" style="width:120px;height:36px">更新票數</div>
+<script>
+ window.__result = {};
+ const store = { enabled:true, count:2, presaleCode:'' };
+ window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
+   local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };
+ window.fetch = () => Promise.reject(new Error('offline'));
+</script>
+<script src="../inject.js"></script><script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+// 一開始就有 5 張 → 按監票會立刻點進去 → 網站跳 alert 說已售完 → 要接掉 alert 並繼續監票
+setTimeout(() => { const b=[...document.querySelectorAll('#__kham_panel button')].find(x=>/監票/.test(x.textContent)); if(b) b.click(); }, 1500);
+setTimeout(() => { window.__result.clicksAt3s = window.__clicks||0; }, 3200);
+setTimeout(() => {
+  const r = window.__result;
+  document.getElementById('RESULT').textContent =
+    'ALERT_SWALLOWED=' + (typeof window.alert === 'function' && !/native code/.test(String(window.alert)) ? 'PASS' : 'FAIL') +
+    ' | RESUMED_WATCH=' + ((window.__clicks||0) > r.clicksAt3s ? 'PASS(' + window.__clicks + ')' : 'FAIL(' + (window.__clicks||0) + ')');
+}, 6000);
+</script>
+</body></html>

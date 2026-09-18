@@ -97,11 +97,12 @@
     });
   } catch (e) { /* 定義失敗就只靠 XHR 判斷 */ }
 
-  // 原生 alert 也記一份（少數流程會用到）
-  const origAlert = window.alert;
+  // 原生 alert：一律接掉，不讓瀏覽器跳出會擋住整頁的對話框（例如「該票區已售完！」）。
+  // 訊息轉給 content script 用 toast 顯示，內容一個字都不少，只是不再需要人按「確定」。
+  // confirm() 不碰 —— 那是要人做決定的。
   window.alert = function (msg) {
     post('ALERT', { text: String(msg == null ? '' : msg) });
-    return origAlert.call(this, msg);
+    try { console.log('[寬宏輔助] 已接掉 alert：', msg); } catch (e) {}
   };
 
   // ---- 3. 提供 content script 觸發頁面函式的管道 ----
@@ -170,6 +171,20 @@
         if (!fired) { target.click(); fired = true; how.push('native'); }
         post('CMD', { cmd: 'REFRESH_AREA', ok: fired, how: how.join(' ') });
       } catch (e) { post('CMD', { cmd: 'REFRESH_AREA', ok: false, how: 'err ' + String(e && e.message || e) }); }
+    }
+    // 監票命中：觸發票區列自己綁的點擊（網站用 jQuery 委派在 tr 上）
+    if (d.cmd === 'CLICK_ROW' && d.id) {
+      try {
+        const tr = document.getElementById(String(d.id));
+        if (tr) {
+          // 從列裡最內層可點的東西點起（a → td → tr），事件一路往上冒泡：
+          // handler 不管綁在 a、td、tr、還是用 jQuery 委派在表格上，都收得到
+          const target = tr.querySelector('a,button') || tr.querySelector('td') || tr;
+          // 兩種方式都會沿路冒泡到 tr／表格，tr 上的 onclick 也會被叫到，不必再另外呼叫
+          if (window.jQuery) window.jQuery(target).trigger('click');
+          else target.click();
+        }
+      } catch (e) { /* 由 content script 的原生 click 補 */ }
     }
     if (d.cmd === 'RESET_CLICK') {
       // 網站用 isClick 當送出中旗標；失敗後偶爾沒還原會卡住，這裡只還原旗標

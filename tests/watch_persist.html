@@ -1,0 +1,23 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>監票勾選持久：F5 之後自動繼續</title></head><body>
+<div id="AREA_DIV"><table id="salesTable">
+  <tr class="status_tr Soldout" id="4001"><td>■</td><td>A區</td><td>8,380</td><td>已售完</td></tr>
+</table></div>
+<div class="btn-update" onclick="window.__clicks=(window.__clicks||0)+1" style="width:120px;height:36px">更新票數</div>
+<script>
+ window.__result = {};
+ // 模擬 F5 之後：設定裡 watch 已經是勾選狀態，不按任何按鈕也要自動監票
+ const store = { enabled:true, watch:true, count:2, presaleCode:'' };
+ window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)), set:()=>Promise.resolve() },
+   local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };
+ window.fetch = () => Promise.reject(new Error('offline'));
+</script>
+<script src="../inject.js"></script><script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+setTimeout(() => {
+  document.getElementById('RESULT').textContent =
+    'AUTO_STARTED_AFTER_RELOAD=' + ((window.__clicks||0) >= 3 ? 'PASS(' + window.__clicks + ')' : 'FAIL(' + (window.__clicks||0) + ')');
+}, 5000);
+</script>
+</body></html>

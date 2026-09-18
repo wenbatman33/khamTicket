@@ -17,13 +17,14 @@
   if (window.__khamHelperLoaded) return;
   window.__khamHelperLoaded = true;
 
-  const VER = '2.5.1';
+  const VER = '2.8.0';
 
   // ---------------------------------------------------------------- 設定
   // 這個工具只做一件事：**看到元素就幫你填／幫你點**。
   // 它不挑場次、不挑票區、不自己換頁、不輪詢庫存 —— 那些都由你自己決定。
   const DEFAULTS = {
     enabled: true,           // 總開關：關掉之後這個工具什麼都不做
+    watch: false,            // 監票：勾著就在每個票區頁自動每秒按「更新票數」，有票就點進去；F5 也不停
     presaleCode: '',         // 優先購序號：看到欄位就照原樣填入，不裁切
     autoSubmitPresale: true, // 序號填好自動按送出
     count: 2,                // 張數欄位要填幾張
@@ -236,8 +237,8 @@
     const here = !!refreshButton();
     watchBtn.style.display = here ? '' : 'none';
     if (!here) return;
-    watchBtn.textContent = watchState.on ? '👁 監票中（' + watchState.clicks + '）' : '👁 監票';
-    watchBtn.style.background = watchState.on ? '#7c4dff' : '#3a3f4a';
+    watchBtn.textContent = watchState.on ? '👁 監票中（' + watchState.clicks + '）' : (S.watch ? '👁 監票（待命）' : '👁 監票');
+    watchBtn.style.background = (watchState.on || S.watch) ? '#7c4dff' : '#3a3f4a';
     watchBtn.style.color = '#fff';
     watchBtn.title = watchState.on ? '點一下停止監票' : '每秒幫你按一次「更新票數」，有區從售完變有票時提醒你';
   }
@@ -251,12 +252,45 @@
       '按到：' + (watchState.how || '（尚無回報）')];
     open.slice(0, 10).forEach((n) => lines.push('🎟 ' + n + '：' + (Number.isNaN(cur[n].left) ? '未顯示' : cur[n].left)));
     if (watchState.hot.length) lines.push('★ 剛出現：' + watchState.hot.slice(-3).join('、'));
-    lines.push('有票要不要進去，你自己點。');
+    lines.push('票一出現就替你點進去，之後你打驗證碼。');
     showPanel(lines);
   }
 
+  // 監票看到有票 → 立刻點那一區（網站自己的列點擊 → 進張數頁）。
+  // 2026-09-18 實測：回流票出現到消失不到兩秒，等人看到再點已經沒了。
+  // 只點一次、點完就停止監票；優先挑空位 >= 你要的張數的那區，沒有就挑最多的。
+  function enterArea(cur) {
+    if (watchState.entered) return false;
+    const need = Math.max(1, toInt(S.count, 1));
+    const rows = Object.keys(cur).map((n) => ({ name: n, left: cur[n].left, tr: cur[n].tr }))
+      .filter((r) => r.left > 0);
+    if (!rows.length) return false;
+    const enough = rows.filter((r) => r.left >= need);
+    const pick = (enough.length ? enough : rows).reduce((a, b) => (b.left > a.left ? b : a));
+    watchState.entered = true;
+    clearInterval(watchState.timer); watchState.timer = null; watchState.on = false;
+    try { if (watchState.mo) watchState.mo.disconnect(); } catch (e) {}
+    toast('🎟 ' + pick.name + ' 有 ' + pick.left + ' 張，替你點進去', 6000);
+    notify('🎟 有票：' + pick.name, '空位 ' + pick.left + '，已替你點進去，去打驗證碼');
+    flashTitle('🎟 ' + pick.name);
+    showPanel(['🎟 有票：' + pick.name + '（' + pick.left + '）', '已替你點進去 → 張數頁', '接下來：打驗證碼、按加入購物車']);
+    // 交給網頁自己的環境去觸發那一列綁的 handler（jQuery 委派／onclick）。只點一次，不補點。
+    window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'CLICK_ROW', id: pick.tr.id }, (location.origin === 'null' ? '*' : location.origin));
+    // 撲空保險：點了之後 2.5 秒還停在這一頁（沒被帶去張數頁），不管網站有沒有說什麼、說了什麼，
+    // 一律當作沒搶到，解鎖並繼續監票。不能只靠訊息裡有沒有「售完」兩個字。
+    setTimeout(() => {
+      if (!watchState.entered) return;                   // 已經由別的路徑解鎖
+      if (!document.getElementById('salesTable') && !document.getElementById('AREA_DIV')) return;   // 已離開
+      watchState.entered = false;
+      if (S.watch && S.enabled !== false) { startWatch(); toast('沒進到張數頁，繼續監票'); }
+    }, 2500);
+    return true;
+  }
+
   function watchCheck() {
+    if (!watchState.on) return;
     const cur = readAreas();
+    if (enterArea(cur)) return;
     if (watchState.prev) {
       Object.keys(cur).forEach((n) => {
         const was = watchState.prev[n] ? watchState.prev[n].left : 0;
@@ -295,7 +329,20 @@
     watchState.prev = readAreas();
     watchState.clicks = 0;
     watchState.hot = [];
+    watchState.entered = false;
     watchState.timer = setInterval(watchTick, WATCH_MS);
+    // 網站 ajax 一重畫票區表就立刻讀、立刻點 —— 不等固定的 0.45 秒，回流票等不起
+    try {
+      if (!watchState.mo) {
+        watchState.mo = new MutationObserver(() => {
+          if (!watchState.on) return;
+          clearTimeout(watchState.moT);
+          watchState.moT = setTimeout(watchCheck, 30);
+        });
+      }
+      const tbl = document.getElementById('salesTable') || document.getElementById('AREA_DIV');
+      if (tbl) watchState.mo.observe(tbl, { childList: true, subtree: true, characterData: true });
+    } catch (e) {}
     watchTick();
     toast('👁 開始監票：每秒按一次「更新票數」');
     renderWatchBtn();
@@ -304,12 +351,26 @@
   function stopWatch() {
     watchState.on = false;
     clearInterval(watchState.timer); watchState.timer = null;
+    try { if (watchState.mo) watchState.mo.disconnect(); } catch (e) {}
     stopFlash();
     renderWatchBtn();
-    showPanel(['👁 監票已停止', '已更新 ' + watchState.clicks + ' 次']);
+    if (!S.watch) showPanel(['👁 監票已取消', '已更新 ' + watchState.clicks + ' 次']);
   }
 
-  function toggleWatch() { if (watchState.on) stopWatch(); else startWatch(); }
+  // 勾選＝持久狀態，寫進設定；頁面重整、撲空、換到別的票區頁都會自動接著監
+  function setWatch(on) {
+    S.watch = !!on;
+    try { chrome.storage.sync.set({ watch: S.watch }); } catch (e) {}
+    if (S.watch) { if (refreshButton()) startWatch(); }
+    else stopWatch();
+  }
+  function toggleWatch() { setWatch(!S.watch); }
+
+  // 這一頁有「更新票數」而且勾選著 → 自動開始
+  function autoWatch() {
+    if (S.enabled === false || !S.watch || watchState.on || watchState.entered) return;
+    if (refreshButton()) startWatch();
+  }
 
   const OK_TXT = /^(ok|確定|確認|知道了|我知道了|關閉|close|是)$/i;
   const DIALOG_SEL = '.ui-dialog,[role="dialog"],[id*="dialog" i],[class*="dialog" i],[class*="popout" i],[class*="modal" i]';
@@ -969,6 +1030,11 @@
       qtyState.submitted = false;
       window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'RESET_CLICK' }, (location.origin === 'null' ? '*' : location.origin));
       toast('⚠️ ' + t);
+      // 監票點進去卻撲空（回流票幾秒就沒了）→ 還在票區頁的話，立刻回去繼續監票
+      if (watchState.entered) {
+        watchState.entered = false;
+        if (S.watch && refreshButton()) { startWatch(); toast('撲空了，繼續監票'); }
+      }
       return;
     }
     qtyState.submitted = false;
@@ -1070,6 +1136,9 @@
       });
     }
 
+    // 監票：勾選著就在票區頁自動開始（F5 之後也是）
+    autoWatch();
+
     // 4. 驗證碼 → 放大並把游標放進去。
     //    ⚠️ 只做這兩件事，永遠不碰圖片、不代填、不猜答案。
     if (!fired.captcha && document.getElementById('CHK')) once('captcha', () => setupCaptcha());
@@ -1099,6 +1168,10 @@
       mo.observe(document.documentElement, { childList: true, subtree: true });
     } catch (e) {}
     setInterval(sweep, 500);
+    // 從張數頁按「上一頁」回來時 Chrome 會用快取還原這一頁，內部狀態還停在「已點過」→ 重置並接著監
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted) { watchState.entered = false; watchState.on = false; autoWatch(); }
+    });
     // 這一頁沒有要自動做的事時也把面板叫出來：開關要隨時按得到
     setTimeout(() => {
       if (!panelBody || !panelBody.textContent) {
@@ -1121,11 +1194,20 @@
     if (area !== 'sync') return;
     Object.keys(changes).forEach((k) => { S[k] = changes[k].newValue; });
     renderToggle();
+    if (changes.watch) { if (S.watch) autoWatch(); else stopWatch(); }
+    if (changes.enabled && S.enabled === false) stopWatch();
     if (has("input[KEY='TYPE_ID']") || has('#PRICE')) renderQtyPanel();
   });
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (!msg || msg.type !== 'RUN_NOW') return;
+    if (!msg) return;
+    // popup 上的監票鈕
+    if (msg.type === 'WATCH_STATE' || msg.type === 'WATCH_TOGGLE') {
+      if (msg.type === 'WATCH_TOGGLE') setWatch(typeof msg.on === 'boolean' ? msg.on : !S.watch);
+      sendResponse && sendResponse({ here: !!refreshButton(), watch: !!S.watch, on: watchState.on, clicks: watchState.clicks, entered: !!watchState.entered });
+      return;
+    }
+    if (msg.type !== 'RUN_NOW') return;
     // 手動執行：把這一頁「現在能幫你做的」全做一遍
     let did = false;
     if (dismissDialog()) did = true;
