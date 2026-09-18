@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>進到購票頁要自動關閉監票</title></head><body>
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>購票頁：這一頁暫停監票，但勾選要保留</title></head><body>
 <!-- 張數頁：有張數欄位與驗證碼，沒有票區表 -->
 <input type="hidden" id="QUANTITY_LIMIT" value="4" />
 <input type="hidden" ID="T1" KEY="TYPE_ID" Value="T1" />
@@ -22,7 +22,7 @@ setTimeout(() => {
   const r = window.__result;
   document.getElementById('RESULT').textContent =
     'NO_REFRESH_CLICKS=' + ((window.__clicks||0) === 0 ? 'PASS' : 'FAIL(' + window.__clicks + ')') +
-    ' | WATCH_UNCHECKED=' + (r.saved && r.saved.watch === false ? 'PASS' : 'FAIL') +
+    ' | SETTING_KEPT=' + (!(r.saved && r.saved.watch === false) ? 'PASS' : 'FAIL（把勾選關掉了，被彈回票區頁就不會繼續監）') +
     ' | QTY_STILL_FILLED=' + (document.querySelector("input[KEY='T1']").value === '2' ? 'PASS' : 'FAIL') +
     ' | CAPTCHA_FOCUSED=' + (document.activeElement === document.getElementById('CHK') ? 'PASS' : 'FAIL');
 }, 4000);

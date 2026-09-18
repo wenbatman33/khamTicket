@@ -6,9 +6,10 @@ const DEFAULTS = {
   presaleCode: '',
   autoSubmitPresale: true,
   count: 2,
+  autoCheckout: true,
 };
 
-const ids = ['enabled', 'watch', 'presaleCode', 'autoSubmitPresale', 'count'];
+const ids = ['enabled', 'watch', 'presaleCode', 'autoSubmitPresale', 'count', 'autoCheckout'];
 const els = {};
 ids.concat(['masterBox', 'masterState', 'save', 'run', 'status', 'watchBox', 'watchState']).forEach((k) => {
   els[k] = document.getElementById(k);
@@ -29,6 +30,7 @@ chrome.storage.sync.get(DEFAULTS).then((s) => {
   els.presaleCode.value = s.presaleCode || '';
   els.autoSubmitPresale.checked = s.autoSubmitPresale !== false;
   els.count.value = String(parseInt(s.count, 10) || 2);
+  els.autoCheckout.checked = s.autoCheckout !== false;
 });
 
 function collect() {
@@ -39,6 +41,7 @@ function collect() {
     presaleCode: els.presaleCode.value.trim(),
     autoSubmitPresale: els.autoSubmitPresale.checked,
     count: Math.max(1, n(els.count, 2)),
+    autoCheckout: els.autoCheckout.checked,
   };
 }
 

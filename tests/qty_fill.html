@@ -12,7 +12,7 @@
 <script>
  window.__result = {};
  // 票區由使用者自己選；工具不會按加入購物車
- const store = { enabled:true, autoSubmitCaptcha:true, count:2, startAt:'', refreshMs:300,
+ const store = { enabled:true, autoSubmitCart:false, count:2, startAt:'', refreshMs:300,
                  presaleCode:'', directUrls:'', priceTargets:'', targets:'', crossPrice:false };
  window.chrome = {
    storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },

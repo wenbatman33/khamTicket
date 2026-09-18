@@ -1,0 +1,27 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>購物車自動按結帳；不可碰付款與下單</title></head><body>
+<div>購物車　保留時間 09:58</div>
+<table><tr><td>BIGBANG 2/27 8380元 × 2</td></tr></table>
+<a href="javascript:;" onclick="window.__result.checkout=(window.__result.checkout||0)+1">結帳</a>
+<!-- 下面兩個是結帳頁才會出現的東西，絕對不可以被按到 -->
+<button onclick="window.__result.pay=true">確認付款</button>
+<button onclick="window.__result.order=true">送出訂單</button>
+<script>
+ window.__result = {};
+ const store = { enabled:true, autoCheckout:true, count:2, presaleCode:'' };
+ window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)), set:()=>Promise.resolve() },
+   local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };
+ window.fetch = () => Promise.reject(new Error('offline'));
+</script>
+<script src="../inject.js"></script><script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+setTimeout(() => {
+  const r = window.__result;
+  document.getElementById('RESULT').textContent =
+    'CHECKOUT_CLICKED=' + ((r.checkout||0) === 1 ? 'PASS' : 'FAIL(' + (r.checkout||0) + ')') +
+    ' | PAY_UNTOUCHED=' + (r.pay ? 'FAIL（替使用者付款了）' : 'PASS') +
+    ' | ORDER_UNTOUCHED=' + (r.order ? 'FAIL（替使用者下單了）' : 'PASS');
+}, 3000);
+</script>
+</body></html>

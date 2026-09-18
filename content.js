@@ -17,7 +17,7 @@
   if (window.__khamHelperLoaded) return;
   window.__khamHelperLoaded = true;
 
-  const VER = '2.9.1';
+  const VER = '3.2.0';
 
   // ---------------------------------------------------------------- 設定
   // 這個工具只做一件事：**看到元素就幫你填／幫你點**。
@@ -28,6 +28,7 @@
     presaleCode: '',         // 優先購序號：看到欄位就照原樣填入，不裁切
     autoSubmitPresale: true, // 序號填好自動按送出
     count: 2,                // 張數欄位要填幾張
+    autoCheckout: true,      // 進到購物車頁自動按「結帳」（只帶你到結帳頁，絕不替你付款下單）
   };
   let S = Object.assign({}, DEFAULTS);
 
@@ -200,6 +201,41 @@
     log(msg);
   }
 
+  // ---------------------------------------------------------------- 購物車頁
+  // 加入購物車之後還有一段路：購物車有保留時間，要自己找「結帳」。
+  // 這一步替你按，但**只把你帶到結帳頁**；付款方式、取票方式、最後送出訂單一律不碰 ——
+  // 那是花錢的決定，必須你自己按。
+  function onCartPage() {
+    if (!/UTK0206|UTK0203|CART/i.test(location.pathname + location.search)) {
+      // 網址認不出來就看內容：有「購物車 / 保留時間」字樣且有結帳鈕
+      const t = (document.body && document.body.innerText || '').slice(0, 3000);
+      if (!/購物車|保留時間|保留期限/.test(t)) return false;
+    }
+    return !!checkoutButton();
+  }
+
+  const CHECKOUT_TXT = /^(結帳|前往結帳|下一步|確認結帳|去結帳)$/;
+  function checkoutButton() {
+    const cands = [...document.querySelectorAll('button,input[type=submit],input[type=button],a,div,span')];
+    return cands.find((b) => visibleEl(b) && !b.closest('#__kham_panel,#__kham_toast')
+      && CHECKOUT_TXT.test(norm(b.value || elText(b, 12)))) || null;
+  }
+
+  function runCart() {
+    const btn = checkoutButton();
+    if (!btn) return;
+    const left = ((document.body.innerText || '').match(/(\d{1,2}\s*[:：]\s*\d{2})/) || [])[1] || '';
+    if (!S.autoCheckout) {
+      showPanel(['🛒 已在購物車頁' + (left ? '｜保留 ' + left : ''), '請自己按「結帳」（自動結帳已關閉）']);
+      return;
+    }
+    act('購物車頁 → 按結帳');
+    showPanel(['🛒 購物車' + (left ? '｜保留 ' + left : ''), '替你按「結帳」進入結帳頁',
+      '付款方式、送出訂單一律由你自己來']);
+    toast('🛒 替你按「結帳」\n付款與送出訂單請自己確認', 5000);
+    clickReal(innermostClickable(btn));
+  }
+
   // ---------------------------------------------------------------- 動作紀錄
   // 工具做了什麼要看得到：存 sessionStorage（換頁後還在），面板底部列最近幾筆。
   const ACT_KEY = 'kham_actions';
@@ -275,9 +311,11 @@
   }
 
   // 讀票區表：票區名稱 → 空位（數字；已售完 = 0；沒顯示 = NaN）
+  // 漏洞 C：原本用票區名稱當 key，同名兩列（不同 GROUP）會互相蓋掉。
+  // 改用 id，沒有 id 才退回「名稱#第幾列」，保證每一列都各自被追蹤。
   function readAreas() {
     const out = {};
-    document.querySelectorAll('#salesTable tr.status_tr').forEach((tr) => {
+    [...document.querySelectorAll('#salesTable tr.status_tr')].forEach((tr, i) => {
       const c = tr.cells;
       const name = c[1] ? c[1].textContent.trim() : '';
       const t = c[3] ? c[3].textContent.trim() : '';
@@ -286,7 +324,7 @@
       if (/售完|額滿/.test(t) || /\bSoldout\b/i.test(tr.className || '')) left = 0;
       else if (/^[\d,]+$/.test(t.replace(/\s/g, ''))) left = toInt(t);
       else left = NaN;
-      out[name] = { left, tr };
+      out[tr.id || (name + '#' + i)] = { left, tr, name };
     });
     return out;
   }
@@ -305,11 +343,11 @@
   function renderWatchPanel() {
     const cur = readAreas();
     const names = Object.keys(cur);
-    const open = names.filter((n) => cur[n].left > 0 || Number.isNaN(cur[n].left));
+    const open = names.filter((k) => cur[k].left > 0 || Number.isNaN(cur[k].left));
     const lines = ['👁 監票中｜已更新 ' + watchState.clicks + ' 次｜' + new Date().toLocaleTimeString(),
       '票區 ' + names.length + '｜有票 ' + open.length,
       '按到：' + (watchState.how || '（尚無回報）')];
-    open.slice(0, 10).forEach((n) => lines.push('🎟 ' + n + '：' + (Number.isNaN(cur[n].left) ? '未顯示' : cur[n].left)));
+    open.slice(0, 10).forEach((k) => lines.push('🎟 ' + cur[k].name + '：' + (Number.isNaN(cur[k].left) ? '未顯示' : cur[k].left)));
     if (watchState.hot.length) lines.push('★ 剛出現：' + watchState.hot.slice(-3).join('、'));
     lines.push('票一出現就替你點進去，之後你打驗證碼。');
     showPanel(lines);
@@ -321,7 +359,7 @@
   function enterArea(cur) {
     if (watchState.entered) return false;
     const need = Math.max(1, toInt(S.count, 1));
-    const rows = Object.keys(cur).map((n) => ({ name: n, left: cur[n].left, tr: cur[n].tr }))
+    const rows = Object.keys(cur).map((k) => ({ name: cur[k].name, left: cur[k].left, tr: cur[k].tr }))
       .filter((r) => r.left > 0);
     if (!rows.length) return false;
     const enough = rows.filter((r) => r.left >= need);
@@ -341,7 +379,10 @@
       location.href = url;
       return true;
     }
-    act('組不出網址 → 改用點擊');
+    // 漏洞 E：組網址需要列的 id（票區 ID）與 GROUP_ID（rel="a24" 或座位圖）。
+    // 缺任一個就只能點擊，而點擊這條路從沒在真站驗證成功過 —— 所以這裡把缺了什麼寫進紀錄，
+    // 事後看得出來是哪一段沒拿到。
+    act('組不出網址（id=' + (pick.tr.id || '無') + ' rel=' + (pick.tr.getAttribute('rel') || '無') + '）→ 改用點擊');
     // 直接對手上這個列元素點：從最內層可點的東西點起（a → td → tr），事件冒泡到列與表格上的 handler。
     // 不靠 id —— 網站重畫表格後新列可能沒有 id，靠 id 會一下都點不到卻以為點了。
     const inner = pick.tr.querySelector('a,button') || pick.tr.querySelector('td') || pick.tr;
@@ -374,17 +415,11 @@
     const cur = readAreas();
     if (enterArea(cur)) return;
     if (watchState.prev) {
-      Object.keys(cur).forEach((n) => {
-        const was = watchState.prev[n] ? watchState.prev[n].left : 0;
-        const now = cur[n].left;
-        if (was === 0 && now > 0) {
-          // 從售完變有票：把那一列標黃、閃標題、桌面通知
-          watchState.hot.push(n + ' ' + now);
-          try { cur[n].tr.style.background = '#fff176'; setTimeout(() => { cur[n].tr.style.background = ''; }, 6000); } catch (e) {}
-          flashTitle('🎟 ' + n + ' 有票 ' + now);
-          notify('🎟 有票：' + n, '空位 ' + now + '，要進去請自己點');
-          toast('🎟 ' + n + ' 出現 ' + now + ' 張', 6000);
-        }
+      Object.keys(cur).forEach((k) => {
+        const was = watchState.prev[k] ? watchState.prev[k].left : 0;
+        const now = cur[k].left;
+        const n = cur[k].name;
+        if (was === 0 && now > 0) watchState.hot.push(n + ' ' + now);
       });
     }
     watchState.prev = cur;
@@ -397,13 +432,34 @@
     if (onBuyPage()) { stopWatch(); return; }      // 保險：已在購票頁就立刻收手
     if (S.enabled === false) { stopWatch(); return; }
     const btn = refreshButton();
-    if (!btn) { stopWatch(); toast('找不到「更新票數」按鈕，監票停止'); return; }
+    if (!btn) { refetchAreas(); return; }      // 沒有更新鈕 → 自己抓整頁回來比對
     if (btn.disabled) return;
     // 交給 MAIN world 去叫網站自己綁的 handler（onclick 屬性／jQuery 事件／全域函式），
     // 從 content script 這邊 .click() 常常點到外層包裝、觸發不了它的 loading。
     window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'REFRESH_AREA' }, (location.origin === 'null' ? '*' : location.origin));
     watchState.clicks++;
-    setTimeout(watchCheck, 450);   // 等網站的 ajax 把表格重畫完再讀
+    // 漏洞 A：原本固定等 450ms 才讀一次，ajax 慢一點就讀到舊資料、要再等一秒——
+    // 回流票只活兩秒，這一秒就是差別。改成按完之後連續檢查到下一次按為止。
+    for (const ms of [100, 200, 320, 450, 600, 800]) setTimeout(watchCheck, ms);
+  }
+
+  // 沒有「更新票數」鈕的票區頁：自己把整頁抓回來，把票區表換掉再比對。
+  // 比 ajax 慢，但總比什麼都不做好。
+  let refetching = false;
+  async function refetchAreas() {
+    if (refetching) return;
+    refetching = true;
+    try {
+      const res = await fetch(location.href, { credentials: 'include', cache: 'no-store' });
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const fresh = doc.getElementById('salesTable');
+      const cur = document.getElementById('salesTable');
+      if (fresh && cur && fresh.innerHTML !== cur.innerHTML) cur.innerHTML = fresh.innerHTML;
+      watchState.clicks++;
+      watchCheck();
+    } catch (e) { act('整頁重讀失敗：' + String(e && e.message || e)); }
+    finally { refetching = false; }
   }
 
   function startWatch() {
@@ -423,8 +479,12 @@
           watchState.moT = setTimeout(watchCheck, 30);
         });
       }
-      const tbl = document.getElementById('salesTable') || document.getElementById('AREA_DIV');
-      if (tbl) watchState.mo.observe(tbl, { childList: true, subtree: true, characterData: true });
+      // 漏洞 B：原本綁 #salesTable 這個元素本身，網站若把整張表換掉（replaceChild／innerHTML）
+      // observer 就跟著死了。改綁最外層的容器，表格被整個抽換也還看得到。
+      const root = document.getElementById('AREA_DIV')
+        || (document.getElementById('salesTable') || {}).parentElement
+        || document.body;
+      if (root) watchState.mo.observe(root, { childList: true, subtree: true, characterData: true });
     } catch (e) {}
     watchTick();
     toast('👁 開始監票：每秒按一次「更新票數」');
@@ -461,18 +521,28 @@
   function autoWatch() {
     if (S.enabled === false || watchState.on || watchState.entered) return;
     if (onBuyPage()) {
-      // 進到購票頁就把勾選取消：不只這一頁不監，回上一頁也不會自己又跳走
-      if (S.watch) {
-        S.watch = false;
-        try { chrome.storage.sync.set({ watch: false }); } catch (e) {}
-        act('已進購票頁 → 自動關閉監票');
-        toast('🎟 已進到購票頁，監票自動關閉\n專心打驗證碼、按加入購物車', 6000);
+      // 在購票頁「只暫停這個分頁」，勾選保持著。
+      // 不能把設定關掉 —— 萬一那幾張被搶先、你被彈回票區頁，監票就停了，
+      // 一次失敗就出局；回流票是連續戰，必須能自動接著監。
+      // 其他分頁（盯別的票價）也不受影響，繼續各自監各自的。
+      if (S.watch && !watchState.pausedHere) {
+        watchState.pausedHere = true;
+        act('在購票頁 → 這個分頁暫停監票（勾選保留）');
+        toast('🎟 已進到購票頁，這一頁不會再有動作\n專心打驗證碼、按加入購物車', 6000);
       }
       stopWatch();
       return;
     }
     if (!S.watch) return;
-    if (refreshButton()) startWatch();
+    if (refreshButton()) { startWatch(); return; }
+    // 漏洞 D：票區頁沒有「更新票數」鈕時，原本靜默不啟動，你會以為在監其實沒有。
+    if (has('#salesTable') && !watchState.warnedNoBtn) {
+      watchState.warnedNoBtn = true;
+      act('這一頁找不到「更新票數」鈕 → 改用整頁重讀');
+      showPanel(['⚠️ 這一頁沒有「更新票數」按鈕', '改用每 2 秒重讀整頁票區表來監看',
+        '（速度較慢，但不會什麼都不做）']);
+      startWatch();
+    }
   }
 
   const OK_TXT = /^(ok|確定|確認|知道了|我知道了|關閉|close|是)$/i;
@@ -957,12 +1027,17 @@
   }
 
   // 驗證碼：放大原圖並聚焦輸入框，由使用者輸入；不做辨識
+  // 驗證碼：**只做兩件事 —— 放大圖片、把游標放進去。**
+  //
+  // 2026-09-18 使用者明確指示：「驗證碼千萬不要替我監聽，你一監聽都會有錯誤。」
+  // 所以這裡對 #CHK **沒有任何事件監聽**：不監聽 input、不監聽 keydown、不監聽組字、
+  // 不改你打的字（不做全半形轉換）、不判斷打滿沒、不自動送出。
+  // 圖片的 src 也永遠不碰（2026-09-17 事故：換過 src 導致圖與答案對不上）。
   function setupCaptcha() {
     const chk = document.getElementById('CHK');
     const pic = document.getElementById('chk_pic');
     if (!chk) return false;
-    // 放大只改 width，讓瀏覽器做平滑縮放；transform + pixelated 會把新版驗證碼元件的圖糊掉。
-    // 絕對不要碰 src —— 網站改用 jquery.captcha 元件（captchaInstance），src 由它自己管。
+    // 放大只改 width，讓瀏覽器做平滑縮放；不動 src、不套 transform
     if (pic && !pic.__khamZoom) {
       pic.__khamZoom = true;
       const w = pic.getBoundingClientRect().width || pic.naturalWidth || 0;
@@ -971,99 +1046,10 @@
       pic.style.margin = '10px 0 10px 4px';
     }
     chk.style.outline = '3px solid #c8102e';
-    chk.setAttribute('autocomplete', 'off');
-    // 輸入法提示：桌面 Chrome 管不到 macOS 的輸入法（ime-mode 早已從標準移除，
-    // chrome.input.ime 只有 ChromeOS 才有），這幾個屬性只對行動裝置的虛擬鍵盤有效。
-    chk.setAttribute('inputmode', 'latin');
-    chk.setAttribute('lang', 'en');
-    chk.setAttribute('autocapitalize', 'off');
-    chk.setAttribute('spellcheck', 'false');
     try { chk.scrollIntoView({ block: 'center' }); } catch (e) {}
     setTimeout(() => { try { chk.focus(); } catch (e) {} }, 60);
-
-    if (!chk.__khamBound) {
-      chk.__khamBound = true;
-      chk.addEventListener('input', () => {
-        if (chk.disabled) return;                       // 元件正在換圖，這時的值是半截的
-        if (document.querySelector('.captcha-mask.is-visible')) return;   // 新元件的載入遮罩還在
-        normalizeCaptcha(chk);   // 只把全形轉半形、濾掉中文，不做任何送出
-      });
-      // 中文輸入法組字期間不要動它的值，否則會把你正在打的字打斷
-      chk.addEventListener('compositionstart', () => { chk.__khamComposing = true; });
-      chk.addEventListener('compositionend', () => {
-        chk.__khamComposing = false;
-        normalizeCaptcha(chk);
-      });
-    }
+    act('驗證碼：已放大並聚焦（不做任何監聽）');
     return true;
-  }
-
-  // 2026-09-17 事故：這裡原本寫死 pic.src = '/pic.aspx?TYPE=UTK0201_001'，
-  // 但當天買的是 UTK0202_ 站席頁（TYPE 應為 UTK0202），等於把畫面換成「另一個驗證碼槽」的圖，
-  // 使用者看到的圖與伺服器要驗的答案從此對不上，打再對都是錯。
-  // 而且網站已改用 jquery.captcha 元件，錯誤回應自己就帶 captchaInstance().refresh(true)。
-  // 結論：一律不碰圖片，只清空欄位並把游標放回去，刷新交給網站。
-  // 忘了切輸入法時，打出來的是全形英數（ＡＢ１２）或中文。驗證碼一定是半形英數，
-  // 所以：全形一律轉半形、非英數一律去掉，並提醒你切輸入法。
-  // 只動「你已經打進去的內容」，永遠不碰驗證碼圖片。
-  function toHalfWidth(t) {
-    return String(t).replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
-      .replace(/\u3000/g, ' ');
-  }
-
-  // 回傳 true = 現在的值可以拿來判斷長度；false = 還在組字中，先別動
-  function normalizeCaptcha(chk) {
-    if (chk.__khamComposing) return false;              // 注音／倉頡組字中
-    const raw = chk.value;
-    const cleaned = toHalfWidth(raw).replace(/[^A-Za-z0-9]/g, '');
-    if (cleaned === raw) return true;
-    const pos = chk.selectionStart;
-    chk.value = cleaned;
-    try { chk.setSelectionRange(Math.min(pos, cleaned.length), Math.min(pos, cleaned.length)); } catch (e) {}
-    if (/[\uFF01-\uFF5E\u4E00-\u9FFF\u3100-\u312F]/.test(raw)) {
-      chk.style.outline = '3px solid #ff9800';
-      toast('⚠️ 偵測到全形或中文，已自動轉半形並濾掉\n請把輸入法切成英文（⌃Space 或 ⌘Space）', 4000);
-      setTimeout(() => { chk.style.outline = '3px solid #c8102e'; }, 2500);
-    }
-    return true;
-  }
-
-  // 位數一律以頁面上的 maxlength 為準（實測 #CHK maxlength="4"）。
-  // 不做成設定：設錯會提早送出半截的驗證碼，這種錯不該讓使用者自己承擔。
-  function captchaLen(chk) {
-    const dom = chk && parseInt(chk.getAttribute('maxlength'), 10);
-    return Number.isFinite(dom) && dom > 0 ? dom : 4;
-  }
-
-  // 真正要換圖時，按網站自己的刷新鈕（onclick="$('#chk_pic').captchaInstance().refresh()"），
-  // 永遠不要自己組 /pic.aspx 網址 —— 真實網址在元件的 data-captcha-url，TYPE 每頁不同。
-  function clickCaptchaRefresh() {
-    const btn = [...document.querySelectorAll('img,button,a,span')]
-      .find((b) => /captchaInstance\(\)\.refresh/.test(b.getAttribute('onclick') || ''))
-      || document.querySelector('.captcha-refresh-btn');
-    if (btn) { btn.click(); return true; }
-    return false;
-  }
-
-  function refreshCaptcha() {
-    const chk = document.getElementById('CHK');
-    if (!chk) return;
-    // 元件刷新期間會把欄位 disabled，等它放行再清空聚焦，否則我們的清空會被它蓋掉
-    let tries = 0;
-    const ready = () => {
-      if (chk.disabled && tries++ < 40) { setTimeout(ready, 100); return; }
-      chk.value = '';
-      try { chk.focus(); } catch (e) {}
-      // 網站沒自己換圖（src 還停在佔位的 1x1 gif）才按它的刷新鈕，仍然不碰 src
-      const pic = document.getElementById('chk_pic');
-      if (pic && /^data:image\/gif/.test(pic.getAttribute('src') || '')) {
-        setTimeout(() => {
-          const p2 = document.getElementById('chk_pic');
-          if (p2 && /^data:image\/gif/.test(p2.getAttribute('src') || '')) clickCaptchaRefresh();
-        }, 800);
-      }
-    };
-    setTimeout(ready, 120);
   }
 
   function renderQtyPanel(extra) {
@@ -1079,7 +1065,7 @@
     ];
     if (loggedOut()) lines.push('⚠️ 尚未登入：請先登入，本工具不代填帳密');
     else lines.push('✔ 已登入');
-    lines.push('驗證碼打完請自己按「加入購物車」');
+    lines.push('驗證碼由你自己打、自己按「加入購物車」（工具完全不碰這個欄位）');
     if (extra) lines.push(extra);
     showPanel(lines);
   }
@@ -1118,10 +1104,11 @@
       return;
     }
     if (/驗證碼/.test(t)) {
+      // 驗證碼錯誤：只把網站的「送出中」旗標解開讓你能再送，**不碰欄位、不換圖、不清空**。
+      // 使用者明確要求不要監聽／不要動驗證碼，之前動它反而製造錯誤。
       qtyState.submitted = false;
       window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'RESET_CLICK' }, (location.origin === 'null' ? '*' : location.origin));
-      refreshCaptcha();
-      toast('⚠️ ' + t + '\n已換新驗證碼，請重新輸入');
+      toast('⚠️ ' + t);
       return;
     }
     if (/帳號|密碼|登入/.test(t)) {
@@ -1241,6 +1228,9 @@
 
     // 監票：勾選著就在票區頁自動開始（F5 之後也是）
     autoWatch();
+
+    // 3.5 購物車頁 → 替你按「結帳」（只到結帳頁，不付款、不下單）
+    if (!fired.cart && onCartPage()) once('cart', () => runCart());
 
     // 4. 驗證碼 → 放大並把游標放進去。
     //    ⚠️ 只做這兩件事，永遠不碰圖片、不代填、不猜答案。

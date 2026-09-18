@@ -1,0 +1,37 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>驗證碼欄位完全不被碰</title></head><body>
+<input type="hidden" id="QUANTITY_LIMIT" value="4" />
+<input type="hidden" ID="T1" KEY="TYPE_ID" Value="T1" />
+<input class="numbox" type="number" id="AMOUNT" KEY='T1' value="0" />
+<img id="chk_pic" src="/pic.aspx?TYPE=UTK0201_001" width="100" height="40">
+<input name="CHK" type="text" maxlength="4" id="CHK" />
+<button onclick="window.__result.cart=true">加入購物車</button>
+<script>
+ window.__result = {};
+ const store = { enabled:true, count:2, presaleCode:'' };
+ window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)), set:()=>Promise.resolve() },
+   local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };
+ window.fetch = () => Promise.reject(new Error('offline'));
+ window.addShoppingCart = () => { window.__result.cart = true; };
+</script>
+<script src="../inject.js"></script><script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+const chk = document.getElementById('CHK');
+const src0 = document.getElementById('chk_pic').getAttribute('src');
+setTimeout(() => {
+  // 打全形、打滿、按 Enter —— 工具都不該有任何反應
+  chk.value = 'ＡＢ１２';
+  chk.dispatchEvent(new Event('input', { bubbles: true }));
+  chk.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+}, 1500);
+setTimeout(() => {
+  const r = window.__result;
+  document.getElementById('RESULT').textContent =
+    'VALUE_UNCHANGED=' + (chk.value === 'ＡＢ１２' ? 'PASS' : 'FAIL（被改成「' + chk.value + '」）') +
+    ' | NOT_SUBMITTED=' + (r.cart ? 'FAIL（替使用者送出了）' : 'PASS') +
+    ' | IMG_SRC_UNCHANGED=' + (document.getElementById('chk_pic').getAttribute('src') === src0 ? 'PASS' : 'FAIL') +
+    ' | ZOOMED_AND_FOCUSED=' + (document.getElementById('chk_pic').style.width && document.activeElement === chk ? 'PASS' : 'FAIL');
+}, 3000);
+</script>
+</body></html>
