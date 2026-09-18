@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>有票直接跳購票網址</title></head><body>
+<input type="hidden" id="PERFORMANCE_ID" value="P1FE10V3">
+<div id="AREA_DIV"><table id="salesTable">
+  <tr class="status_tr Soldout" id="P1FEAAA1" rel="a24"><td>■</td><td>1樓C09區8380元</td><td>8,380</td><td id="L1">已售完</td></tr>
+</table></div>
+<img id="IMG_MAP" usemap="#seat" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" width="10" height="10">
+<map name="seat"><area href="javascript:Send('0201','P1FE10V3','P1FEAAA1','24')"></map>
+<div class="btn-update" onclick="window.__clicks=(window.__clicks||0)+1; if(window.__clicks===2){document.getElementById('L1').textContent='3';document.getElementById('P1FEAAA1').className='status_tr';}" style="width:120px;height:36px">更新票數</div>
+<script>
+ window.__result = {};
+ const store = { enabled:true, watch:true, count:2, presaleCode:'' };
+ window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)), set:()=>Promise.resolve() },
+   local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };
+ window.fetch = () => Promise.reject(new Error('offline'));
+ // 攔下導頁，記下工具要跳去哪（真實環境就是直接換頁）
+ const nav = Object.getOwnPropertyDescriptor(window.Location.prototype, 'href');
+ try { Object.defineProperty(window.location, 'href', { set(v){ window.__result.nav = v; }, get(){ return document.URL; } }); } catch(e) { window.__result.defineErr = e.message; }
+</script>
+<script src="../inject.js"></script><script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+setTimeout(() => {
+  const u = window.__result.nav || '';
+  document.getElementById('RESULT').textContent =
+    'NAVIGATED=' + (u ? 'PASS' : 'FAIL(' + (window.__result.defineErr||'沒跳') + ')') +
+    ' | PAGE=' + (/UTK0201_001/.test(u) ? 'PASS' : 'FAIL') +
+    ' | AREA_ID=' + (/PERFORMANCE_PRICE_AREA_ID=P1FEAAA1/.test(u) ? 'PASS' : 'FAIL') +
+    ' | GROUP_ID=' + (/GROUP_ID=24/.test(u) ? 'PASS' : 'FAIL');
+}, 5000);
+</script>
+</body></html>

@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>進到購票頁要自動關閉監票</title></head><body>
+<!-- 張數頁：有張數欄位與驗證碼，沒有票區表 -->
+<input type="hidden" id="QUANTITY_LIMIT" value="4" />
+<input type="hidden" ID="T1" KEY="TYPE_ID" Value="T1" />
+<input class="numbox" type="number" id="AMOUNT" KEY='T1' value="0" />
+<input name="CHK" type="text" maxlength="4" id="CHK" />
+<!-- 故意放一顆「更新票數」，確認工具不會因為看到它就又開始監 -->
+<div class="btn-update" onclick="window.__clicks=(window.__clicks||0)+1" style="width:120px;height:36px">更新票數</div>
+<script>
+ window.__result = {};
+ const store = { enabled:true, watch:true, count:2, presaleCode:'' };   // 勾選著進來
+ window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)),
+     set:(o)=>{ window.__result.saved = Object.assign(window.__result.saved||{}, o); return Promise.resolve(); } },
+   local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(){} } };
+ window.fetch = () => Promise.reject(new Error('offline'));
+</script>
+<script src="../inject.js"></script><script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+setTimeout(() => {
+  const r = window.__result;
+  document.getElementById('RESULT').textContent =
+    'NO_REFRESH_CLICKS=' + ((window.__clicks||0) === 0 ? 'PASS' : 'FAIL(' + window.__clicks + ')') +
+    ' | WATCH_UNCHECKED=' + (r.saved && r.saved.watch === false ? 'PASS' : 'FAIL') +
+    ' | QTY_STILL_FILLED=' + (document.querySelector("input[KEY='T1']").value === '2' ? 'PASS' : 'FAIL') +
+    ' | CAPTCHA_FOCUSED=' + (document.activeElement === document.getElementById('CHK') ? 'PASS' : 'FAIL');
+}, 4000);
+</script>
+</body></html>

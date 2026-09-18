@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "寬宏售票填寫輔助",
-  "version": "2.8.0",
+  "version": "2.9.1",
   "description": "在寬宏售票（kham.com.tw）看到欄位就幫你填：優先購序號、張數；並自動關掉訊息視窗、放大驗證碼。不挑場次、不挑票區、不自動換頁。與該網站無隸屬關係。",
   "permissions": [
     "storage",

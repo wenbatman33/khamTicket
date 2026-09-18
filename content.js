@@ -17,7 +17,7 @@
   if (window.__khamHelperLoaded) return;
   window.__khamHelperLoaded = true;
 
-  const VER = '2.8.0';
+  const VER = '2.9.1';
 
   // ---------------------------------------------------------------- 設定
   // 這個工具只做一件事：**看到元素就幫你填／幫你點**。
@@ -176,7 +176,9 @@
   function showPanel(lines) {
     ensurePanel();
     renderToggle();
-    panelBody.textContent = Array.isArray(lines) ? lines.join('\n') : String(lines);
+    const acts = actLines();
+    const tail = acts.length ? '\n── 紀錄\n' + acts.slice(-5).join('\n') : '';
+    panelBody.textContent = (Array.isArray(lines) ? lines.join('\n') : String(lines)) + tail;
   }
 
   function toast(msg, ms = 3500) {
@@ -196,6 +198,63 @@
     clearTimeout(toast._t);
     toast._t = setTimeout(() => { toastEl.style.display = 'none'; }, ms);
     log(msg);
+  }
+
+  // ---------------------------------------------------------------- 動作紀錄
+  // 工具做了什麼要看得到：存 sessionStorage（換頁後還在），面板底部列最近幾筆。
+  const ACT_KEY = 'kham_actions';
+  function act(text) {
+    try {
+      const list = JSON.parse(sessionStorage.getItem(ACT_KEY) || '[]');
+      list.push(new Date().toLocaleTimeString('zh-TW', { hour12: false }) + ' ' + text);
+      sessionStorage.setItem(ACT_KEY, JSON.stringify(list.slice(-8)));
+    } catch (e) {}
+  }
+  function actLines() {
+    try { return JSON.parse(sessionStorage.getItem(ACT_KEY) || '[]'); } catch (e) { return []; }
+  }
+
+  // ---------------------------------------------------------------- 票區 → 購票網址
+  // 2026-09-18：靠「模擬點擊那一列」要賭網站的 handler 綁在哪（tr／td／jQuery 委派），
+  // 賭錯就是看得到票卻一下都沒點到。改成**自己組出購票網址直接跳**，確定性、不靠任何 handler。
+  //   一般：UTK0201_001.aspx?PERFORMANCE_ID=…&GROUP_ID=…&PERFORMANCE_PRICE_AREA_ID=…
+  //   站席：UTK0202_.aspx?…（Send 的第一個參數是 '0202'）
+  // GROUP_ID 兩個來源：座位圖 <map area href="javascript:Send(…)">，或 tr 的 rel="a24 a25" 取第一個。
+  function readGroupMap() {
+    const gmap = {};
+    document.querySelectorAll('map area').forEach((a) => {
+      const href = a.getAttribute('href') || '';
+      let m = /SendA\(\s*'([^']*)'\s*,\s*'([^']*)'\s*,\s*'([^']*)'\s*,\s*'([^']*)'\s*,\s*'([^']*)'\s*,\s*'([^']*)'/.exec(href);
+      if (m) { if (!gmap[m[4]]) gmap[m[4]] = { perf: m[2], group: m[3], ag: m[5], agi: m[6], page: m[1] }; return; }
+      m = /Send\(\s*'([^']*)'\s*,\s*'([^']*)'\s*,\s*'([^']*)'\s*,\s*'([^']*)'/.exec(href);
+      if (m) { if (!gmap[m[3]]) gmap[m[3]] = { perf: m[2], group: m[4], ag: '', agi: '', page: m[1] }; }
+    });
+    return gmap;
+  }
+
+  function groupFromRel(rel) {
+    const first = String(rel || '').trim().split(/\s+/)[0] || '';
+    const m = /^a(\d+)$/.exec(first);
+    return m ? m[1] : null;
+  }
+
+  // 回傳這一列的購票網址；資訊不足回 null（那就退回點擊）
+  function rowBuyUrl(tr) {
+    const areaId = tr.id || '';
+    if (!areaId) return null;
+    const g = readGroupMap()[areaId] || null;
+    const group = g ? g.group : groupFromRel(tr.getAttribute('rel'));
+    if (group == null || group === '') return null;
+    const perf = (g && g.perf) || hid('PERFORMANCE_ID') || new URLSearchParams(location.search).get('PERFORMANCE_ID') || '';
+    if (!perf) return null;
+    const p = new URLSearchParams();
+    p.set('PERFORMANCE_ID', perf);
+    p.set('GROUP_ID', group);
+    p.set('PERFORMANCE_PRICE_AREA_ID', areaId);
+    if (g && g.ag) p.set('ACTIVITY_GROUP_ID', g.ag);
+    if (g && g.agi) p.set('ACTIVITY_GROUP_ITEM_ID', g.agi);
+    const page = (g && g.page) === '0202' ? 'UTK0202_.aspx?' : 'UTK0201_001.aspx?';
+    return new URL(page + p.toString(), location.href).href;
   }
 
   // ---------------------------------------------------------------- 監票
@@ -273,15 +332,38 @@
     toast('🎟 ' + pick.name + ' 有 ' + pick.left + ' 張，替你點進去', 6000);
     notify('🎟 有票：' + pick.name, '空位 ' + pick.left + '，已替你點進去，去打驗證碼');
     flashTitle('🎟 ' + pick.name);
-    showPanel(['🎟 有票：' + pick.name + '（' + pick.left + '）', '已替你點進去 → 張數頁', '接下來：打驗證碼、按加入購物車']);
-    // 交給網頁自己的環境去觸發那一列綁的 handler（jQuery 委派／onclick）。只點一次，不補點。
-    window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'CLICK_ROW', id: pick.tr.id }, (location.origin === 'null' ? '*' : location.origin));
+    act('看到 ' + pick.name + ' ' + pick.left + ' 張');
+    // 第一優先：直接跳購票網址（不靠網站的 handler，跳不跳得過去是確定的）
+    const url = rowBuyUrl(pick.tr);
+    if (url) {
+      act('跳 ' + url.split('?')[0].split('/').pop() + ' area=' + pick.tr.id);
+      showPanel(['🎟 有票：' + pick.name + '（' + pick.left + '）', '直接跳購票頁…', url.slice(0, 90)]);
+      location.href = url;
+      return true;
+    }
+    act('組不出網址 → 改用點擊');
+    // 直接對手上這個列元素點：從最內層可點的東西點起（a → td → tr），事件冒泡到列與表格上的 handler。
+    // 不靠 id —— 網站重畫表格後新列可能沒有 id，靠 id 會一下都點不到卻以為點了。
+    const inner = pick.tr.querySelector('a,button') || pick.tr.querySelector('td') || pick.tr;
+    clickReal(inner);
+    // 再請網頁環境用 jQuery 觸發一次（jQuery 委派的 handler 只認 jQuery 自己的事件系統時才需要）；
+    // 用 id 找，找不到就用第幾列
+    const idx = [...document.querySelectorAll('#salesTable tr.status_tr')].indexOf(pick.tr);
+    window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'CLICK_ROW', id: pick.tr.id || '', index: idx, jqOnly: true }, (location.origin === 'null' ? '*' : location.origin));
+    // 面板只寫「做了什麼」，不寫「到了哪」—— 有沒有真的進到張數頁，由你眼前的畫面決定。
+    // v2.7.0 就是先寫了「已點進去」卻其實一下都沒點到，害你以為點了。
+    const where = inner.tagName + (inner.className ? '.' + String(inner.className).split(/\s+/)[0] : '');
+    act('點了 ' + where + (pick.tr.id ? ' id=' + pick.tr.id : ' 第' + (idx + 1) + '列'));
+    showPanel(['🎟 有票：' + pick.name + '（' + pick.left + '）',
+      '已點擊那一列（' + where + '），等網站帶你去張數頁…',
+      '若 2.5 秒內沒換頁 → 視為撲空，自動繼續監票']);
     // 撲空保險：點了之後 2.5 秒還停在這一頁（沒被帶去張數頁），不管網站有沒有說什麼、說了什麼，
     // 一律當作沒搶到，解鎖並繼續監票。不能只靠訊息裡有沒有「售完」兩個字。
     setTimeout(() => {
       if (!watchState.entered) return;                   // 已經由別的路徑解鎖
       if (!document.getElementById('salesTable') && !document.getElementById('AREA_DIV')) return;   // 已離開
       watchState.entered = false;
+      act('2.5 秒後仍在票區頁 → 撲空，繼續監');
       if (S.watch && S.enabled !== false) { startWatch(); toast('沒進到張數頁，繼續監票'); }
     }, 2500);
     return true;
@@ -312,6 +394,7 @@
 
   function watchTick() {
     if (!watchState.on) return;
+    if (onBuyPage()) { stopWatch(); return; }      // 保險：已在購票頁就立刻收手
     if (S.enabled === false) { stopWatch(); return; }
     const btn = refreshButton();
     if (!btn) { stopWatch(); toast('找不到「更新票數」按鈕，監票停止'); return; }
@@ -345,6 +428,7 @@
     } catch (e) {}
     watchTick();
     toast('👁 開始監票：每秒按一次「更新票數」');
+    act('開始監票');
     renderWatchBtn();
   }
 
@@ -366,9 +450,28 @@
   }
   function toggleWatch() { setWatch(!S.watch); }
 
+  // 已經站在購票頁（張數／站席／選位）＝ 搶到位了，監票必須立刻收手，
+  // 不然它會在你打驗證碼的時候繼續動作，把你踢回票區頁。
+  function onBuyPage() {
+    return has("input[KEY='TYPE_ID']") || has('#PRICE') || !!document.getElementById('CHK')
+      || has('#SEAT_DIV') || has('area[href*="SeatClick"]');
+  }
+
   // 這一頁有「更新票數」而且勾選著 → 自動開始
   function autoWatch() {
-    if (S.enabled === false || !S.watch || watchState.on || watchState.entered) return;
+    if (S.enabled === false || watchState.on || watchState.entered) return;
+    if (onBuyPage()) {
+      // 進到購票頁就把勾選取消：不只這一頁不監，回上一頁也不會自己又跳走
+      if (S.watch) {
+        S.watch = false;
+        try { chrome.storage.sync.set({ watch: false }); } catch (e) {}
+        act('已進購票頁 → 自動關閉監票');
+        toast('🎟 已進到購票頁，監票自動關閉\n專心打驗證碼、按加入購物車', 6000);
+      }
+      stopWatch();
+      return;
+    }
+    if (!S.watch) return;
     if (refreshButton()) startWatch();
   }
 
@@ -1147,6 +1250,7 @@
   let sweepTimer = null;
 
   function start() {
+    act('載入 ' + (document.getElementById('salesTable') ? '票區頁' : (document.getElementById('CHK') ? '張數頁' : location.pathname.split('/').pop())));
     logEvent('nav', { url: location.href, title: document.title }, true);
     watchNotice();
     // 每一頁都拍，包含購物車／結帳／實名制等沒特別處理的頁：

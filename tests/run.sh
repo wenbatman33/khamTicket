@@ -8,6 +8,13 @@ run() {
   printf '%-18s ' "$1"
   out=$("$CHROME" --headless=new --disable-gpu --allow-file-access-from-files \
         --virtual-time-budget=12000 --dump-dom "file://$DIR/$1.html" 2>/dev/null)
+  # 這一項會真的導頁（有票就跳購票網址），所以用最終文件裡的網址判斷，不看 RESULT
+  if [ "$1" = watch_buyurl ]; then
+    if echo "$out" | grep -q 'UTK0201_001.aspx?PERFORMANCE_ID=P1FE10V3&GROUP_ID=24&PERFORMANCE_PRICE_AREA_ID=P1FEAAA1'; then
+      echo "PASS（跳到 UTK0201_001，GROUP_ID 與票區 ID 都正確）"
+    else echo "FAIL（沒跳或網址不對）"; fail=1; fi
+    return
+  fi
   line=$(echo "$out" | grep -o '<div id="RESULT">[^<]*' | sed 's/<div id="RESULT">//')
   echo "${line:-（沒有結果：頁面可能被導走了）}"
   echo "$line" | grep -q FAIL && fail=1
@@ -24,6 +31,8 @@ run captcha_ime      # 忘了切輸入法：全形轉半形、中文濾掉、正
 run master_off       # 總開關關掉：完全不動作（不關視窗、不填、不送）
 run watch_refresh    # 監票：每秒按「更新票數」，某區售完→有票就點那一區並停止監票
 run watch_persist    # 監票是勾選：設定裡勾著，F5 之後不按任何鈕也要自動繼續
+run watch_buyurl     # 有票時直接組出購票網址跳過去（不靠網站 handler）
+run watch_stops_on_buypage # 進到購票頁：監票自動關閉、不再按更新；張數照填、驗證碼照聚焦
 run watch_retry      # 點進去後網站毫無回應：2.5 秒沒到張數頁就自動繼續監；handler 綁在 td 也點得到
 run alert_soldout    # 原生 alert 接掉不擋頁；監票點進去撲空（已售完）要自動繼續監票
 run no_navigation    # 同一頁有訂購鈕與票區表時：只填該填的，絕不點、絕不換頁

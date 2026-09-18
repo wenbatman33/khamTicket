@@ -173,10 +173,12 @@
       } catch (e) { post('CMD', { cmd: 'REFRESH_AREA', ok: false, how: 'err ' + String(e && e.message || e) }); }
     }
     // 監票命中：觸發票區列自己綁的點擊（網站用 jQuery 委派在 tr 上）
-    if (d.cmd === 'CLICK_ROW' && d.id) {
+    if (d.cmd === 'CLICK_ROW') {
       try {
-        const tr = document.getElementById(String(d.id));
-        if (tr) {
+        let tr = d.id ? document.getElementById(String(d.id)) : null;
+        if (!tr && typeof d.index === 'number' && d.index >= 0) tr = document.querySelectorAll('#salesTable tr.status_tr')[d.index] || null;
+        // content script 已經用原生事件點過一次；這裡只在有 jQuery 時再用它的事件系統觸發，避免點兩次
+        if (tr && (!d.jqOnly || window.jQuery)) {
           // 從列裡最內層可點的東西點起（a → td → tr），事件一路往上冒泡：
           // handler 不管綁在 a、td、tr、還是用 jQuery 委派在表格上，都收得到
           const target = tr.querySelector('a,button') || tr.querySelector('td') || tr;
