@@ -16,6 +16,7 @@
    runtime:{ onMessage:{ addListener(){} }, sendMessage(m){ if(m&&m.type==='NOTIFY') window.__result.notified.push(m.title); } } };
  window.fetch = () => Promise.reject(new Error('offline test'));
 </script>
+<script src="../inject.js"></script>
 <script src="../content.js"></script>
 <div id="RESULT">running…</div>
 <script>
@@ -33,7 +34,8 @@ setTimeout(() => {
     ' | REFRESH_CLICKED=' + ((window.__clicks||0) >= 3 ? 'PASS(' + window.__clicks + ')' : 'FAIL(' + (window.__clicks||0) + ')') +
     ' | NOTIFIED=' + (r.notified.some(t => /B5/.test(t)) ? 'PASS' : 'FAIL') +
     ' | ROW_HIGHLIGHTED=' + (row.style.background ? 'PASS' : 'FAIL') +
-    ' | NO_AREA_CLICK=' + (location.href.includes('UTK0201_001') ? 'FAIL' : 'PASS');
+    ' | NO_AREA_CLICK=' + (location.href.includes('UTK0201_001') ? 'FAIL' : 'PASS') +
+    ' | PANEL=' + (document.getElementById('__kham_panel') ? document.getElementById('__kham_panel').innerText.replace(/\n/g,' / ').slice(0,200) : 'none');
 }, 6500);
 </script>
 </body></html>

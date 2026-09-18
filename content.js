@@ -17,7 +17,7 @@
   if (window.__khamHelperLoaded) return;
   window.__khamHelperLoaded = true;
 
-  const VER = '2.5.0';
+  const VER = '2.5.1';
 
   // ---------------------------------------------------------------- 設定
   // 這個工具只做一件事：**看到元素就幫你填／幫你點**。
@@ -181,6 +181,7 @@
   function toast(msg, ms = 3500) {
     if (!toastEl) {
       toastEl = document.createElement('div');
+      toastEl.id = '__kham_toast';     // 讓找按鈕的邏輯認得出這是我們自己的東西，別去點它
       toastEl.style.cssText = [
         'position:fixed', 'right:14px', 'bottom:14px', 'z-index:2147483601', 'max-width:340px',
         'background:rgba(20,22,28,.94)', 'color:#fff', 'padding:10px 14px', 'border-radius:8px',
@@ -203,11 +204,12 @@
   const WATCH_MS = 1000;
   const watchState = { on: false, timer: null, prev: null, clicks: 0, hot: [] };
 
+  const ours = (el) => !!el.closest('#__kham_panel,#__kham_toast');
   function refreshButton() {
-    const all = [...document.querySelectorAll('button,a,input[type=button],input[type=submit]')].filter(visibleEl);
+    const all = [...document.querySelectorAll('button,a,input[type=button],input[type=submit]')].filter((b) => visibleEl(b) && !ours(b));
     return all.find((b) => /更新票數/.test(b.value || elText(b, 12)))
       || all.find((b) => /refreshArea|DO_REFRESH/i.test(b.getAttribute('onclick') || ''))
-      || [...document.querySelectorAll('div,span')].filter(visibleEl)
+      || [...document.querySelectorAll('div,span')].filter((b) => visibleEl(b) && !ours(b))
         .map(innermostClickable).find((b) => /更新票數/.test(elText(b, 12)))
       || null;
   }
@@ -245,7 +247,8 @@
     const names = Object.keys(cur);
     const open = names.filter((n) => cur[n].left > 0 || Number.isNaN(cur[n].left));
     const lines = ['👁 監票中｜已更新 ' + watchState.clicks + ' 次｜' + new Date().toLocaleTimeString(),
-      '票區 ' + names.length + '｜有票 ' + open.length];
+      '票區 ' + names.length + '｜有票 ' + open.length,
+      '按到：' + (watchState.how || '（尚無回報）')];
     open.slice(0, 10).forEach((n) => lines.push('🎟 ' + n + '：' + (Number.isNaN(cur[n].left) ? '未顯示' : cur[n].left)));
     if (watchState.hot.length) lines.push('★ 剛出現：' + watchState.hot.slice(-3).join('、'));
     lines.push('有票要不要進去，你自己點。');
@@ -279,7 +282,9 @@
     const btn = refreshButton();
     if (!btn) { stopWatch(); toast('找不到「更新票數」按鈕，監票停止'); return; }
     if (btn.disabled) return;
-    clickReal(btn);
+    // 交給 MAIN world 去叫網站自己綁的 handler（onclick 屬性／jQuery 事件／全域函式），
+    // 從 content script 這邊 .click() 常常點到外層包裝、觸發不了它的 loading。
+    window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'REFRESH_AREA' }, (location.origin === 'null' ? '*' : location.origin));
     watchState.clicks++;
     setTimeout(watchCheck, 450);   // 等網站的 ajax 把表格重畫完再讀
   }
@@ -611,13 +616,13 @@
         if (visibleEl(el) && String(el.value || '').trim() === code0) {
           logEvent('presale_click_dead', { tag }, true);
           toast('點擊沒反應，改用網站的送出函式');
-          window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'VIP_SUBMIT' }, location.origin);
+          window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'VIP_SUBMIT' }, (location.origin === 'null' ? '*' : location.origin));
         }
       }, 800);
     } else {
       // 畫面上找不到鈕 → 直接叫網站自己的送出函式（在 MAIN world）
       toast('找不到送出鈕，改用網站自己的送出函式');
-      window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'VIP_SUBMIT' }, location.origin);
+      window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'VIP_SUBMIT' }, (location.origin === 'null' ? '*' : location.origin));
       setTimeout(() => {
         if (!presaleState.done) {
           showPanel(['● 優先購序號', '序號已填入：' + el.value,
@@ -950,7 +955,7 @@
     }
     if (/驗證碼/.test(t)) {
       qtyState.submitted = false;
-      window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'RESET_CLICK' }, location.origin);
+      window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'RESET_CLICK' }, (location.origin === 'null' ? '*' : location.origin));
       refreshCaptcha();
       toast('⚠️ ' + t + '\n已換新驗證碼，請重新輸入');
       return;
@@ -962,7 +967,7 @@
     }
     if (/售完|已無|不足|額滿|超過|逾時|重新|已被|失敗/.test(t)) {
       qtyState.submitted = false;
-      window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'RESET_CLICK' }, location.origin);
+      window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'RESET_CLICK' }, (location.origin === 'null' ? '*' : location.origin));
       toast('⚠️ ' + t);
       return;
     }
@@ -999,7 +1004,7 @@
     // 回應沒有導向也沒有 alert 就當失敗，立刻解鎖讓你能再送
     if (!hasRedirect && !/alert1?\(/.test(body)) {
       qtyState.submitted = false;
-      window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'RESET_CLICK' }, location.origin);
+      window.postMessage({ __khamCmd: 'KHAM_HELPER', cmd: 'RESET_CLICK' }, (location.origin === 'null' ? '*' : location.origin));
       toast('⚠️ 送出沒有回應（HTTP ' + d.status + '），可再試一次');
       return;
     }
@@ -1016,6 +1021,9 @@
     const d = ev.data;
     if (!d || !d.__kham) return;
     if (d.kind === 'ALERT') handleAlert(d.data && d.data.text);
+    if (d.kind === 'CMD' && d.data && d.data.cmd === 'REFRESH_AREA') {
+      watchState.how = (d.data.ok ? '' : '✗ ') + (d.data.how || '');
+    }
     if (d.kind === 'CMD' && d.data && d.data.cmd === 'VIP_SUBMIT') {
       presaleState.done = !!d.data.ok;
       logEvent('vip_submit_result', d.data, true);

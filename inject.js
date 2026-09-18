@@ -15,7 +15,7 @@
 
   function post(kind, data) {
     try {
-      window.postMessage({ __kham: true, kind, data }, location.origin);
+      window.postMessage({ __kham: true, kind, data }, (location.origin === 'null' ? '*' : location.origin));
     } catch (e) { /* 轉發失敗不影響網站 */ }
   }
 
@@ -120,6 +120,56 @@
         if (typeof window.DoVIPLogin === 'function') { window.DoVIPLogin(); post('CMD', { cmd: 'VIP_SUBMIT', ok: true }); }
         else post('CMD', { cmd: 'VIP_SUBMIT', ok: false });
       } catch (e) { post('CMD', { cmd: 'VIP_SUBMIT', ok: false, err: String(e && e.message || e) }); }
+    }
+    // 監票：叫網站自己的「更新票數」。在 MAIN world 才拿得到它的 onclick 屬性與 jQuery 綁的 handler。
+    if (d.cmd === 'REFRESH_AREA') {
+      const how = [];
+      try {
+        const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+        // 排除擴充功能自己畫的面板與提示框 —— 提示文字裡就有「更新票數」四個字，
+        // 2026-09-18 實測就是因為挑到自己的 toast，按了 85 次網站都沒反應。
+        const ours = (x) => !!x.closest('#__kham_panel,#__kham_toast');
+        const hit = (x) => vis(x) && !ours(x) && /更新票數/.test(x.textContent || x.value || '');
+        // 先找真正可互動的元素；沒有才退到 div/span，且取最內層（textContent 最短）的那個
+        let el = [...document.querySelectorAll('a,button,input')].filter(hit)[0]
+          || [...document.querySelectorAll('div,span,i')].filter(hit).sort((a, b) => (a.textContent || '').length - (b.textContent || '').length)[0]
+          || null;
+        let target = el;
+        for (let n = el; n && n !== document.body; n = n.parentElement) {
+          if (n.onclick || /javascript:|refresh/i.test(n.getAttribute('href') || '') || (n.getAttribute('onclick') || '')) { target = n; break; }
+        }
+        if (!target) { post('CMD', { cmd: 'REFRESH_AREA', ok: false, how: 'not found' }); return; }
+        how.push(target.tagName + (target.id ? '#' + target.id : '') + (target.className ? '.' + String(target.className).split(/\s+/)[0] : ''));
+        let fired = false;
+        // (a) 元素自己的 onclick 屬性
+        if (typeof target.onclick === 'function') { try { target.onclick.call(target, new MouseEvent('click', { bubbles: true })); fired = true; how.push('onclick'); } catch (e) { how.push('onclick!' + e.message); } }
+        // (b) jQuery 綁的 click handler（含在祖先上用 .on('click', selector) 委派的）
+        if (!fired && window.jQuery) {
+          try {
+            for (let n = target; n && n !== document; n = n.parentElement) {
+              const ev = window.jQuery._data && window.jQuery._data(n, 'events');
+              if (ev && ev.click && ev.click.length) {
+                window.jQuery(target).trigger('click'); fired = true; how.push('jq:' + n.tagName); break;
+              }
+            }
+          } catch (e) { how.push('jq!' + e.message); }
+        }
+        // (c) href="javascript:xxx()"：直接執行
+        if (!fired) {
+          const href = target.getAttribute('href') || '';
+          const m = /^javascript:\s*(.+)$/i.exec(href);
+          if (m && !/^;?\s*$|void/.test(m[1])) { try { (0, eval)(m[1]); fired = true; how.push('href-js'); } catch (e) { how.push('href!' + e.message); } }
+        }
+        // (d) 網站常見的全域函式名
+        if (!fired) {
+          const fn = ['refreshArea', 'RefreshArea', 'refresh_area', 'doRefreshArea', 'DoRefreshArea', 'refreshTicket', 'RefreshTicket']
+            .map((k) => window[k]).find((f) => typeof f === 'function');
+          if (fn) { try { fn(); fired = true; how.push('global'); } catch (e) { how.push('global!' + e.message); } }
+        }
+        // (e) 真的沒別的了，原生 click
+        if (!fired) { target.click(); fired = true; how.push('native'); }
+        post('CMD', { cmd: 'REFRESH_AREA', ok: fired, how: how.join(' ') });
+      } catch (e) { post('CMD', { cmd: 'REFRESH_AREA', ok: false, how: 'err ' + String(e && e.message || e) }); }
     }
     if (d.cmd === 'RESET_CLICK') {
       // 網站用 isClick 當送出中旗標；失敗後偶爾沒還原會卡住，這裡只還原旗標
