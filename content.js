@@ -17,7 +17,7 @@
   if (window.__khamHelperLoaded) return;
   window.__khamHelperLoaded = true;
 
-  const VER = '2.4.0';
+  const VER = '2.5.0';
 
   // ---------------------------------------------------------------- 設定
   // 這個工具只做一件事：**看到元素就幫你填／幫你點**。
@@ -86,9 +86,11 @@
   let panel, panelBody, toastEl;
 
   let toggleBtn = null;
+  let watchBtn = null;
 
   // 面板上的開關長相跟著狀態走：紅＝自動搶票中、灰＝已關閉
   function renderToggle() {
+    renderWatchBtn();
     if (!toggleBtn) return;
     const on = S.enabled !== false;
     toggleBtn.textContent = on ? '⏸ 停止全部' : '▶ 已停止（點此啟用）';
@@ -131,11 +133,18 @@
       S.enabled = next;                       // 先就地生效，不等 storage 回來
       renderToggle();
       toast(next ? '▶ 已啟用：看到欄位會幫你填' : '⏸ 已全部停止：完全不動作');
+      if (!next && watchState.on) stopWatch();
       try { chrome.storage.sync.set({ enabled: next }); } catch (err) {}
       if (next) sweep();
     });
 
-    bar.appendChild(title); bar.appendChild(toggleBtn);
+    // 監票：反覆按網站自己的「更新票數」。只在票區頁顯示，由你按下才開始
+    watchBtn = document.createElement('button');
+    watchBtn.style.cssText = toggleBtn.style.cssText + ';display:none';
+    watchBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+    watchBtn.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); toggleWatch(); });
+
+    bar.appendChild(title); bar.appendChild(watchBtn); bar.appendChild(toggleBtn);
     renderToggle();
 
     panelBody = document.createElement('div');
@@ -186,6 +195,116 @@
     toast._t = setTimeout(() => { toastEl.style.display = 'none'; }, ms);
     log(msg);
   }
+
+  // ---------------------------------------------------------------- 監票
+  // 票區頁右下角有一顆網站自己的「更新票數」，按了會用 ajax 重畫票區表。
+  // 「監票」就是幫你每秒按它一次，並在某一區從「已售完」變成有數字時大聲提醒。
+  // 它不點票區、不換頁 —— 看到有票之後要不要進去，是你的事。
+  const WATCH_MS = 1000;
+  const watchState = { on: false, timer: null, prev: null, clicks: 0, hot: [] };
+
+  function refreshButton() {
+    const all = [...document.querySelectorAll('button,a,input[type=button],input[type=submit]')].filter(visibleEl);
+    return all.find((b) => /更新票數/.test(b.value || elText(b, 12)))
+      || all.find((b) => /refreshArea|DO_REFRESH/i.test(b.getAttribute('onclick') || ''))
+      || [...document.querySelectorAll('div,span')].filter(visibleEl)
+        .map(innermostClickable).find((b) => /更新票數/.test(elText(b, 12)))
+      || null;
+  }
+
+  // 讀票區表：票區名稱 → 空位（數字；已售完 = 0；沒顯示 = NaN）
+  function readAreas() {
+    const out = {};
+    document.querySelectorAll('#salesTable tr.status_tr').forEach((tr) => {
+      const c = tr.cells;
+      const name = c[1] ? c[1].textContent.trim() : '';
+      const t = c[3] ? c[3].textContent.trim() : '';
+      if (!name) return;
+      let left;
+      if (/售完|額滿/.test(t) || /\bSoldout\b/i.test(tr.className || '')) left = 0;
+      else if (/^[\d,]+$/.test(t.replace(/\s/g, ''))) left = toInt(t);
+      else left = NaN;
+      out[name] = { left, tr };
+    });
+    return out;
+  }
+
+  function renderWatchBtn() {
+    if (!watchBtn) return;
+    const here = !!refreshButton();
+    watchBtn.style.display = here ? '' : 'none';
+    if (!here) return;
+    watchBtn.textContent = watchState.on ? '👁 監票中（' + watchState.clicks + '）' : '👁 監票';
+    watchBtn.style.background = watchState.on ? '#7c4dff' : '#3a3f4a';
+    watchBtn.style.color = '#fff';
+    watchBtn.title = watchState.on ? '點一下停止監票' : '每秒幫你按一次「更新票數」，有區從售完變有票時提醒你';
+  }
+
+  function renderWatchPanel() {
+    const cur = readAreas();
+    const names = Object.keys(cur);
+    const open = names.filter((n) => cur[n].left > 0 || Number.isNaN(cur[n].left));
+    const lines = ['👁 監票中｜已更新 ' + watchState.clicks + ' 次｜' + new Date().toLocaleTimeString(),
+      '票區 ' + names.length + '｜有票 ' + open.length];
+    open.slice(0, 10).forEach((n) => lines.push('🎟 ' + n + '：' + (Number.isNaN(cur[n].left) ? '未顯示' : cur[n].left)));
+    if (watchState.hot.length) lines.push('★ 剛出現：' + watchState.hot.slice(-3).join('、'));
+    lines.push('有票要不要進去，你自己點。');
+    showPanel(lines);
+  }
+
+  function watchCheck() {
+    const cur = readAreas();
+    if (watchState.prev) {
+      Object.keys(cur).forEach((n) => {
+        const was = watchState.prev[n] ? watchState.prev[n].left : 0;
+        const now = cur[n].left;
+        if (was === 0 && now > 0) {
+          // 從售完變有票：把那一列標黃、閃標題、桌面通知
+          watchState.hot.push(n + ' ' + now);
+          try { cur[n].tr.style.background = '#fff176'; setTimeout(() => { cur[n].tr.style.background = ''; }, 6000); } catch (e) {}
+          flashTitle('🎟 ' + n + ' 有票 ' + now);
+          notify('🎟 有票：' + n, '空位 ' + now + '，要進去請自己點');
+          toast('🎟 ' + n + ' 出現 ' + now + ' 張', 6000);
+        }
+      });
+    }
+    watchState.prev = cur;
+    renderWatchPanel();
+    renderWatchBtn();
+  }
+
+  function watchTick() {
+    if (!watchState.on) return;
+    if (S.enabled === false) { stopWatch(); return; }
+    const btn = refreshButton();
+    if (!btn) { stopWatch(); toast('找不到「更新票數」按鈕，監票停止'); return; }
+    if (btn.disabled) return;
+    clickReal(btn);
+    watchState.clicks++;
+    setTimeout(watchCheck, 450);   // 等網站的 ajax 把表格重畫完再讀
+  }
+
+  function startWatch() {
+    if (watchState.on) return;
+    watchState.on = true;
+    watchState.prev = readAreas();
+    watchState.clicks = 0;
+    watchState.hot = [];
+    watchState.timer = setInterval(watchTick, WATCH_MS);
+    watchTick();
+    toast('👁 開始監票：每秒按一次「更新票數」');
+    renderWatchBtn();
+  }
+
+  function stopWatch() {
+    watchState.on = false;
+    clearInterval(watchState.timer); watchState.timer = null;
+    stopFlash();
+    renderWatchBtn();
+    showPanel(['👁 監票已停止', '已更新 ' + watchState.clicks + ' 次']);
+  }
+
+  function toggleWatch() { if (watchState.on) stopWatch(); else startWatch(); }
 
   const OK_TXT = /^(ok|確定|確認|知道了|我知道了|關閉|close|是)$/i;
   const DIALOG_SEL = '.ui-dialog,[role="dialog"],[id*="dialog" i],[class*="dialog" i],[class*="popout" i],[class*="modal" i]';
@@ -976,7 +1095,8 @@
     setTimeout(() => {
       if (!panelBody || !panelBody.textContent) {
         showPanel([S.enabled === false ? '⏸ 已全部停止' : '● 待命中',
-          S.enabled === false ? '工具完全不動作。點標題列的按鈕可重新啟用。' : '這一頁沒有要幫你填的東西。',
+          S.enabled === false ? '工具完全不動作。點標題列的按鈕可重新啟用。'
+            : (refreshButton() ? '票區頁：要盯這一區的票，按標題列的「👁 監票」。' : '這一頁沒有要幫你填的東西。'),
           '我只做四件事：關訊息視窗、填優先購序號並送出、填張數、放大驗證碼。',
           '場次與票區由你自己選。']);
       }

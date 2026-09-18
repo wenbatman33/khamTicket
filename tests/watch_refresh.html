@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta charset="utf-8"><title>監票：反覆按更新票數、售完變有票要提醒</title></head><body>
+<input type="hidden" id="PERFORMANCE_ID" value="P1FE10V3">
+<div id="AREA_DIV">
+  <table id="salesTable">
+    <tr class="status_tr Soldout" id="2001"><td>■</td><td>平面A4區8380元</td><td>8,380</td><td id="L1">已售完</td></tr>
+    <tr class="status_tr Soldout" id="2002"><td>■</td><td>平面B5區8380元</td><td>8,380</td><td id="L2">已售完</td></tr>
+  </table>
+</div>
+<!-- 網站自己的「更新票數」：第 3 次按下時，B5 從已售完變成 4 -->
+<button id="REFRESH" onclick="window.__clicks=(window.__clicks||0)+1; if(window.__clicks===3){document.getElementById('L2').textContent='4';document.getElementById('2002').className='status_tr';}">更新票數</button>
+<script>
+ window.__result = { notified: [] };
+ const store = { enabled:true, presaleCode:'', count:2 };
+ window.chrome = { storage:{ sync:{ get:(d)=>Promise.resolve(Object.assign({},d,store)) },
+   local:{ get:(d)=>Promise.resolve(d), set:()=>Promise.resolve() }, onChanged:{ addListener(){} } },
+   runtime:{ onMessage:{ addListener(){} }, sendMessage(m){ if(m&&m.type==='NOTIFY') window.__result.notified.push(m.title); } } };
+ window.fetch = () => Promise.reject(new Error('offline test'));
+</script>
+<script src="../content.js"></script>
+<div id="RESULT">running…</div>
+<script>
+// 模擬使用者按下面板上的「👁 監票」
+setTimeout(() => {
+  const b = [...document.querySelectorAll('#__kham_panel button')].find(x => /監票/.test(x.textContent));
+  window.__result.btnFound = !!b;
+  if (b) b.click();
+}, 1500);
+setTimeout(() => {
+  const r = window.__result;
+  const row = document.getElementById('2002');
+  document.getElementById('RESULT').textContent =
+    'WATCH_BTN_SHOWN=' + (r.btnFound ? 'PASS' : 'FAIL') +
+    ' | REFRESH_CLICKED=' + ((window.__clicks||0) >= 3 ? 'PASS(' + window.__clicks + ')' : 'FAIL(' + (window.__clicks||0) + ')') +
+    ' | NOTIFIED=' + (r.notified.some(t => /B5/.test(t)) ? 'PASS' : 'FAIL') +
+    ' | ROW_HIGHLIGHTED=' + (row.style.background ? 'PASS' : 'FAIL') +
+    ' | NO_AREA_CLICK=' + (location.href.includes('UTK0201_001') ? 'FAIL' : 'PASS');
+}, 6500);
+</script>
+</body></html>

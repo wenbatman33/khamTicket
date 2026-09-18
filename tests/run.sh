@@ -7,7 +7,7 @@ fail=0
 run() {
   printf '%-18s ' "$1"
   out=$("$CHROME" --headless=new --disable-gpu --allow-file-access-from-files \
-        --virtual-time-budget=9000 --dump-dom "file://$DIR/$1.html" 2>/dev/null)
+        --virtual-time-budget=12000 --dump-dom "file://$DIR/$1.html" 2>/dev/null)
   line=$(echo "$out" | grep -o '<div id="RESULT">[^<]*' | sed 's/<div id="RESULT">//')
   echo "${line:-（沒有結果：頁面可能被導走了）}"
   echo "$line" | grep -q FAIL && fail=1
@@ -22,6 +22,7 @@ run presale_reopen   # 燈箱關掉再開（同一個 input 被清空）→ 要�
 run qty_fill         # 主開關關著也要填張數，但不可以送出
 run captcha_ime      # 忘了切輸入法：全形轉半形、中文濾掉、正常英數不動
 run master_off       # 總開關關掉：完全不動作（不關視窗、不填、不送）
+run watch_refresh    # 監票：每秒按網站的「更新票數」，某區售完→有票要提醒；不點票區
 run no_navigation    # 同一頁有訂購鈕與票區表時：只填該填的，絕不點、絕不換頁
 echo "---"
 [ $fail = 0 ] && echo "全部通過" || echo "有失敗項目"
