@@ -7,13 +7,22 @@
   python3 scripts/watch_all.py                 # 監預設兩場，每 60 秒
   python3 scripts/watch_all.py --open          # 有票時順便用瀏覽器開直達網址
   python3 scripts/watch_all.py --interval 30 P1EMCIC6
+
+Telegram 通知（選用）：在專案根目錄 .env 加
+  TELEGRAM_BOT_TOKEN=123456:ABC...
+  TELEGRAM_CHAT_ID=123456789
+  python3 scripts/watch_all.py --tg-chatid   # 先傳訊息給 bot，再跑這個查 chat id
+  python3 scripts/watch_all.py --tg-test     # 發一則測試訊息
 """
 import argparse
 import html
+import json
+import os
 import re
 import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +32,38 @@ DEFAULT_PRODUCTS = ['P1EMCIC6', 'P1EVUYWG']  # 2/27、2/28 BIGBANG 高雄
 EXCLUDE = ('身障', '輪椅')                     # 票價名稱或票區名稱含這些字就跳過
 UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
 LOG = Path(__file__).with_name('watch_all.log')
+ENV = Path(__file__).resolve().parent.parent / '.env'
+
+
+def load_env():
+    """讀 .env（KEY=VALUE），不覆蓋已存在的環境變數。"""
+    if not ENV.exists():
+        return
+    for line in ENV.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith('#') and '=' in line:
+            k, v = line.split('=', 1)
+            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+def tg_api(method, **params):
+    token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    if not token:
+        raise RuntimeError('.env 沒有 TELEGRAM_BOT_TOKEN')
+    data = urllib.parse.urlencode(params).encode() if params else None
+    with urllib.request.urlopen(f'https://api.telegram.org/bot{token}/{method}', data=data, timeout=15) as r:
+        return json.load(r)
+
+
+def tg_send(msg):
+    """沒設定就安靜略過；失敗只記 log，不中斷監票。"""
+    chat = os.environ.get('TELEGRAM_CHAT_ID')
+    if not (os.environ.get('TELEGRAM_BOT_TOKEN') and chat):
+        return
+    try:
+        tg_api('sendMessage', chat_id=chat, text=msg, disable_web_page_preview='true')
+    except Exception as e:
+        log(f'⚠️ Telegram 發送失敗：{e}')
 
 
 def fetch(url):
@@ -84,9 +125,10 @@ def log(line):
         f.write(f'{datetime.now():%Y-%m-%d %H:%M:%S} {line}\n')
 
 
-def one_round(products, auto_open):
+def one_round(products, auto_open, prev_open):
     found = 0
     checked = 0
+    now_open = set()
     for pid in products:
         try:
             perfs, _ = list_performances(pid)
@@ -110,10 +152,16 @@ def one_round(products, auto_open):
                 found += 1
                 line = f'🎫 有票！{pid}【{price_name}】{name} ${price} 空位：{seats}\n    {url}'
                 log(line)
+                key = (perf_id, name)
+                now_open.add(key)
+                if key not in prev_open:
+                    tg_send(f'🎫 寬宏有票！\n【{price_name}】{name}\n票價 {price}　空位 {seats}\n{url}')
                 notify('寬宏有票！', f'{price_name} {name} 空位 {seats}')
                 if auto_open and url:
                     subprocess.run(['open', url], check=False)
             time.sleep(0.3)  # 別一次把 22 頁同時打過去
+    prev_open.clear()
+    prev_open.update(now_open)
     return found, checked
 
 
@@ -123,13 +171,35 @@ def main():
     ap.add_argument('--interval', type=int, default=60)
     ap.add_argument('--open', action='store_true', help='有票時用預設瀏覽器開直達網址')
     ap.add_argument('--once', action='store_true', help='只跑一輪')
+    ap.add_argument('--tg-chatid', action='store_true', help='列出傳訊息給 bot 的 chat id')
+    ap.add_argument('--tg-test', action='store_true', help='發一則 Telegram 測試訊息')
     a = ap.parse_args()
+    load_env()
 
-    log(f'開始監票：{", ".join(a.products)}，每 {a.interval} 秒一輪（排除：{"/".join(EXCLUDE)}）')
+    if a.tg_chatid:
+        res = tg_api('getUpdates').get('result', [])
+        chats = {(u.get('message') or {}).get('chat', {}).get('id'): (u.get('message') or {}).get('chat', {})
+                 for u in res if u.get('message')}
+        if not chats:
+            print('找不到訊息：先在 Telegram 對你的 bot 傳一句話，再跑一次')
+        for cid, c in chats.items():
+            print(f'TELEGRAM_CHAT_ID={cid}   # {c.get("first_name", "")} {c.get("username", "")}')
+        return
+    if a.tg_test:
+        if not os.environ.get('TELEGRAM_CHAT_ID'):
+            sys.exit('.env 沒有 TELEGRAM_CHAT_ID')
+        tg_api('sendMessage', chat_id=os.environ['TELEGRAM_CHAT_ID'], text='✅ 寬宏監票 Telegram 通知測試')
+        print('已送出，看一下 Telegram')
+        return
+
+    tg_on = bool(os.environ.get('TELEGRAM_BOT_TOKEN') and os.environ.get('TELEGRAM_CHAT_ID'))
+    prev_open = set()
+
+    log(f'開始監票：{", ".join(a.products)}，每 {a.interval} 秒一輪（排除：{"/".join(EXCLUDE)}，Telegram：{"開" if tg_on else "未設定"}）')
     while True:
         t0 = time.time()
         try:
-            found, checked = one_round(a.products, a.open)
+            found, checked = one_round(a.products, a.open, prev_open)
             log(f'本輪看了 {checked} 個票區，有票 {found} 區')
         except Exception as e:
             log(f'⚠️ 本輪失敗：{e}')
